@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: LicenseRef-Degensoft-ARSL-1.0-Audit
+pragma solidity 0.8.30;
+
+import { Script } from "forge-std/Script.sol";
+
+import { Config } from "./utils/Config.sol";
+
+import { SwapVMRouter } from "../src/routers/SwapVMRouter.sol";
+
+// solhint-disable no-console
+import { console2 } from "forge-std/console2.sol";
+
+contract DeploySwapVMRouter is Script {
+    using Config for *;
+
+    function run() external {
+        (
+            address aquaAddress,
+            string memory name,
+            string memory version
+        ) = vm.readSwapVMRouterParameters();
+
+        vm.startBroadcast();
+        SwapVMRouter swapVMRouter = new SwapVMRouter(
+            aquaAddress,
+            name,
+            version
+        );
+        vm.stopBroadcast();
+
+        console2.log("SwapVMRouter deployed at: ", address(swapVMRouter));
+    }
+}
+// solhint-enable no-console
