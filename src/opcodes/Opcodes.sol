@@ -42,7 +42,7 @@ contract Opcodes is
     function _notInstruction(Context memory /* ctx */, bytes calldata /* args */) internal view {}
 
     function _opcodes() internal pure virtual returns (function(Context memory, bytes calldata) internal[] memory result) {
-        function(Context memory, bytes calldata) internal[44] memory instructions = [
+        function(Context memory, bytes calldata) internal[43] memory instructions = [
             _notInstruction,
             // Debug - reserved for debugging utilities (core infrastructure)
             _notInstruction,
@@ -86,8 +86,6 @@ contract Opcodes is
             // DutchAuction - auction mechanism with limit order and time decay (specific trading type)
             DutchAuction._dutchAuctionBalanceIn1D,
             DutchAuction._dutchAuctionBalanceOut1D,
-            // OraclePriceAdjuster - oracle-based price adjustment (dynamic pricing)
-            OraclePriceAdjuster._oraclePriceAdjuster1D,
             // BaseFeeAdjuster - gas-based price adjustment (dynamic pricing)
             BaseFeeAdjuster._baseFeeAdjuster1D,
             // TWAPSwap - TWAP trading (complex trading strategy)
