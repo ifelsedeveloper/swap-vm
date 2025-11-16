@@ -34,6 +34,15 @@ deploy-swap-vm-aqua:
 deploy-swap-vm-limit:
 	@$(MAKE) FILE_DEPLOY_NAME=LimitSwapVMRouter validate-swap-vm-router deploy-swap-vm-router-impl save-deployments
 
+verify-swap-vm:
+	@$(MAKE) FILE_DEPLOY_NAME=SwapVMRouter validate-verify verify-swap-vm-router-impl
+
+verify-swap-vm-aqua:
+	@$(MAKE) FILE_DEPLOY_NAME=AquaSwapVMRouter validate-verify verify-swap-vm-router-impl
+
+verify-swap-vm-limit:
+	@$(MAKE) FILE_DEPLOY_NAME=LimitSwapVMRouter validate-verify verify-swap-vm-router-impl
+
 deploy-swap-vm-router-impl:
 	@{ \
 	    $(MAKE) ID=FILE_DEPLOY_NAME validate || exit 1; \
@@ -41,6 +50,25 @@ deploy-swap-vm-router-impl:
             --rpc-url $(RPC_URL) \
             --private-key $(PRIVATE_KEY) \
             --broadcast -vvvv; \
+	}
+
+verify-swap-vm-router-impl:
+	@{ \
+	    $(MAKE) ID=FILE_DEPLOY_NAME validate || exit 1; \
+	    DEPLOYMENT_FILE="$(CURRENT_DIR)/deployments/$(OPS_NETWORK)/$${FILE_DEPLOY_NAME}.json"; \
+	    if [ ! -f $$DEPLOYMENT_FILE ]; then \
+	        echo "Deployment file $$DEPLOYMENT_FILE does not exist! Deploy first."; \
+	        exit 1; \
+	    fi; \
+	    CONTRACT_ADDRESS=$$($(MAKE) contract-address DEPLOYMENT_FILE=$$DEPLOYMENT_FILE); \
+	    echo "Verifying $${FILE_DEPLOY_NAME} at $$CONTRACT_ADDRESS on $(OPS_NETWORK)..."; \
+	    forge verify-contract $$CONTRACT_ADDRESS \
+	        src/routers/$${FILE_DEPLOY_NAME}.sol:$${FILE_DEPLOY_NAME} \
+            --skip-is-verified-check \
+            --rpc-url $(RPC_URL) \
+	        --chain-id $(OPS_CHAIN_ID) \
+	        --watch \
+	        --compiler-version $(COMPILER_VERSION); \
 	}
 
 # Helper targets
@@ -74,6 +102,12 @@ validate-swap-vm-router:
 		$(MAKE) ID=OPS_SWAP_VM_ROUTER_VERSION validate || exit 1; \
 		$(MAKE) process-aqua-address process-swap-vm-router-name process-swap-vm-router-version || exit 1; \
 		}
+
+validate-verify:
+	@{ \
+	$(MAKE) ID=OPS_NETWORK validate || exit 1; \
+	$(MAKE) ID=OPS_CHAIN_ID validate || exit 1; \
+	}
 
 validate:
 		@{ \
@@ -187,6 +221,7 @@ help:
 		@echo "Available targets:"
 		@grep -E '^[a-zA-Z0-9_.-]+:' $(CURRENT_DIR)/Makefile | grep -v '^\.' | awk -F: '{print "  " $$1}' | sort -u
 
-.PHONY: deploy-swap-vm deploy-swap-vm-aqua deploy-swap-vm-router-impl save-deployments contract-address validate-swap-vm-router \
+.PHONY: deploy-swap-vm deploy-swap-vm-aqua deploy-swap-vm-limit deploy-swap-vm-router-impl verify-swap-vm verify-swap-vm-aqua \
+        verify-swap-vm-limit verify-swap-vm-router-impl save-deployments contract-address validate-swap-vm-router validate-verify \
         validate process-aqua-address process-swap-vm-router-name process-swap-vm-router-version upsert-constant \
         get get-outputs update build tests coverage snapshot snapshot-check format clean lint anvil balance balance-erc20 help
