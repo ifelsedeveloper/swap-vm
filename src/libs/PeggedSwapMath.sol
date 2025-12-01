@@ -104,27 +104,76 @@ library PeggedSwapMath {
         v = (w * w) / ONE;
     }
 
-    /// @notice Integer square root using Newton's method with proper 1e18 scaling
+    /// @notice High-precision integer square root with 1e18 fixed-point scaling
     /// @dev Computes sqrt(x) where both x and result are scaled by 1e18
-    /// @dev We need: y such that (y/1e18)² = x/1e18, so y² = x * 1e18
-    /// @dev To avoid overflow, we compute: y = sqrt(x) * 1e9 (since sqrt(1e18) = 1e9)
+    /// @dev Based on OpenZeppelin's Math.sqrt() with adaptations for fixed-point arithmetic
+    /// @dev We want: y such that (y/1e18)² ≈ x/1e18, so y ≈ sqrt(x) * 1e9
+    /// @dev Uses bit-shift method for optimal initial guess and exactly 6 Newton iterations
     /// @param x Value to take square root of (scaled by 1e18)
     /// @return y Square root of x (scaled by 1e18)
     function sqrt(uint256 x) internal pure returns (uint256 y) {
-        if (x == 0) return 0;
-        if (x == ONE) return ONE;
-
-        // Compute sqrt(x * 1e18), avoid overflow, compute sqrt(x) first, then adjust scaling
-        uint256 z = (x + 1) / 2;
-        y = x;
-
-        while (z < y) {
-            y = z;
-            z = (x / z + z) / 2;
+        if (x == 0) {
+            return 0;
+        }
+        if (x == ONE) {
+            return ONE; // sqrt(1e18) = 1e18
         }
 
-        // Result scaled by 1e18, so multiply by 1e9
-        // result = y * 1e9 = sqrt(realValue) * 1e18
-        y = y * 1e9;
+        unchecked {
+            // We compute: y = sqrt(x) * 1e9 (since sqrt(1e18) = 1e9)
+            // This maintains 1e18 scale: if x = n * 1e18, then y = sqrt(n) * 1e18
+            
+            // Step 1: Find good initial estimate using bit-shifts (OpenZeppelin method)
+            // This finds the smallest power of 2 greater than sqrt(x)
+            uint256 xn = 1;
+            uint256 aa = x;
+            
+            if (aa >= (1 << 128)) {
+                aa >>= 128;
+                xn <<= 64;
+            }
+            if (aa >= (1 << 64)) {
+                aa >>= 64;
+                xn <<= 32;
+            }
+            if (aa >= (1 << 32)) {
+                aa >>= 32;
+                xn <<= 16;
+            }
+            if (aa >= (1 << 16)) {
+                aa >>= 16;
+                xn <<= 8;
+            }
+            if (aa >= (1 << 8)) {
+                aa >>= 8;
+                xn <<= 4;
+            }
+            if (aa >= (1 << 4)) {
+                aa >>= 4;
+                xn <<= 2;
+            }
+            if (aa >= (1 << 2)) {
+                xn <<= 1;
+            }
+            
+            // Refine estimate to middle of interval (reduces error by half)
+            xn = (3 * xn) >> 1;
+            
+            // Step 2: Newton iterations (exactly 6 for guaranteed convergence)
+            // Each iteration: xn = (xn + x / xn) / 2
+            // Converges quadratically: error after 6 iterations < 1
+            xn = (xn + x / xn) >> 1;
+            xn = (xn + x / xn) >> 1;
+            xn = (xn + x / xn) >> 1;
+            xn = (xn + x / xn) >> 1;
+            xn = (xn + x / xn) >> 1;
+            xn = (xn + x / xn) >> 1;
+            
+            // Step 3: Final correction (ensure we have floor(sqrt(x)))
+            y = xn - (xn > x / xn ? 1 : 0);
+            
+            // Step 4: Scale to 1e18 (multiply by 1e9 since sqrt(1e18) = 1e9)
+            y = y * 1e9;
+        }
     }
 }
