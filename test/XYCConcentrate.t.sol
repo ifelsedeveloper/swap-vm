@@ -466,7 +466,7 @@ contract ConcentrateTest is Test, OpcodesDebug {
         bytes memory takerData
     ) internal returns (uint256 amountOut) {
         // Mint tokens to taker
-        MockToken(tokenIn).mint(taker, amount);
+        TokenMock(tokenIn).mint(taker, amount);
 
         vm.prank(taker);
         (, amountOut,) = _swapVM.swap(order, tokenIn, tokenOut, amount, takerData);
