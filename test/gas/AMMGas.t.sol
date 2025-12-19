@@ -280,7 +280,7 @@ contract AMMGas is Test, OpcodesDebug {
         uint256 priceMin = 0.8e18;
         uint256 priceMax = 1.25e18;
 
-        (uint256 deltaA, uint256 deltaB) = XYCConcentrateArgsBuilder.computeDeltas(
+        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
             BALANCE_A,
             BALANCE_B,
             currentPrice,
@@ -300,7 +300,8 @@ contract AMMGas is Test, OpcodesDebug {
                     address(tokenA),
                     address(tokenB),
                     deltaA,
-                    deltaB
+                    deltaB,
+                    liquidity
                 )),
             program.build(_xycSwapXD)
         );
@@ -316,7 +317,7 @@ contract AMMGas is Test, OpcodesDebug {
         uint256 priceMin = 0.7e18;
         uint256 priceMax = 1.4e18;
 
-        (uint256 deltaA, uint256 deltaB) = XYCConcentrateArgsBuilder.computeDeltas(
+        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
             BALANCE_A,
             BALANCE_B,
             currentPrice,
@@ -336,7 +337,8 @@ contract AMMGas is Test, OpcodesDebug {
                     address(tokenA),
                     address(tokenB),
                     deltaA,
-                    deltaB
+                    deltaB,
+                    liquidity
                 )),
             program.build(_xycSwapXD)
         );
@@ -373,7 +375,7 @@ contract AMMGas is Test, OpcodesDebug {
         uint256 priceMin = 0.8e18;
         uint256 priceMax = 1.25e18;
 
-        (uint256 deltaA, uint256 deltaB) = XYCConcentrateArgsBuilder.computeDeltas(
+        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
             BALANCE_A,
             BALANCE_B,
             currentPrice,
@@ -395,7 +397,8 @@ contract AMMGas is Test, OpcodesDebug {
                     address(tokenA),
                     address(tokenB),
                     deltaA,
-                    deltaB
+                    deltaB,
+                    liquidity
                 )),
             program.build(_decayXD,
                 DecayArgsBuilder.build(decayPeriod)),
@@ -438,7 +441,7 @@ contract AMMGas is Test, OpcodesDebug {
         uint256 priceMin = 0.8e18;
         uint256 priceMax = 1.25e18;
 
-        (uint256 deltaA, uint256 deltaB) = XYCConcentrateArgsBuilder.computeDeltas(
+        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
             BALANCE_A,
             BALANCE_B,
             currentPrice,
@@ -461,7 +464,8 @@ contract AMMGas is Test, OpcodesDebug {
                     address(tokenA),
                     address(tokenB),
                     deltaA,
-                    deltaB
+                    deltaB,
+                    liquidity
                 )),
             program.build(_decayXD,
                 DecayArgsBuilder.build(decayPeriod)),
@@ -518,6 +522,7 @@ contract AMMGas is Test, OpcodesDebug {
             useTransferFromAndAquaPush: false,
             threshold: thresholdData,
             to: address(this),
+            deadline: 0,
             hasPreTransferInCallback: false,
             hasPreTransferOutCallback: false,
             preTransferInHookData: "",

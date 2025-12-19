@@ -122,48 +122,6 @@ contract FeeOutAdditivityViolation is Test, OpcodesDebug {
     }
 
     /**
-     * @notice Test showing _feeOutAsInXYCXD also violates additivity
-     * @dev Even though it converts to feeIn, the feeInBps is variable (depends on amountIn)
-     */
-    function test_FlatFeeOut_AsIn_ViolatesAdditivity() public {
-        console.log("=== _feeOutAsInXYCXD Additivity Test ===");
-
-        ISwapVM.Order memory order = _createOrderWithFeeOutAsIn();
-        bytes memory takerData = _signAndPackTakerData(order, true, 0);
-
-        uint256 swapAmount = 100e18;
-
-        // Single swap: swap(100)
-        (, uint256 singleOut) = _quoteSwap(order, swapAmount, takerData);
-        console.log("Single swap(100) out:", singleOut);
-
-        // Split swap: swap(50) + swap(50)
-        uint256 halfAmount = swapAmount / 2;
-
-        // Execute first swap
-        _executeSwap(order, halfAmount, takerData);
-        uint256 split1Out = _getLastSwapOut();
-
-        // Quote second swap (state changed)
-        (, uint256 split2Out) = _quoteSwap(order, halfAmount, takerData);
-
-        uint256 splitTotalOut = split1Out + split2Out;
-
-        console.log("Split swap(50+50) out:", splitTotalOut);
-
-        // Check additivity violation
-        if (splitTotalOut > singleOut) {
-            uint256 profit = splitTotalOut - singleOut;
-            console.log("!!! ADDITIVITY VIOLATED !!! Profit:", profit);
-        } else if (singleOut > splitTotalOut) {
-            uint256 diff = singleOut - splitTotalOut;
-            console.log("Single > Split by:", diff);
-        } else {
-            console.log("Additivity preserved");
-        }
-    }
-
-    /**
      * @notice Test calculating when splitting is profitable considering gas costs
      * @dev Uses same order and compares quote(100) vs execute(50)+quote(50)
      */
@@ -404,20 +362,6 @@ contract FeeOutAdditivityViolation is Test, OpcodesDebug {
         return _createOrder(bytecode);
     }
 
-    function _createOrderWithFeeOutAsIn() private view returns (ISwapVM.Order memory) {
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([BALANCE, BALANCE])
-                )),
-            program.build(_feeOutAsInXYCXD, FeeArgsBuilder.buildFlatFee(FEE_BPS)),
-            program.build(_xycSwapXD)
-        );
-        return _createOrder(bytecode);
-    }
-
     function _createOrderWithFlatFeeIn() private view returns (ISwapVM.Order memory) {
         Program memory program = ProgramBuilder.init(_opcodes());
         bytes memory bytecode = bytes.concat(
@@ -475,6 +419,7 @@ contract FeeOutAdditivityViolation is Test, OpcodesDebug {
             useTransferFromAndAquaPush: false,
             threshold: thresholdData,
             to: address(this),
+            deadline: 0,
             hasPreTransferInCallback: false,
             hasPreTransferOutCallback: false,
             preTransferInHookData: "",
