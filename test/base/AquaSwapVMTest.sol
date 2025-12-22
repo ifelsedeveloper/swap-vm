@@ -121,6 +121,7 @@ contract AquaSwapVMTest is AquaStrategyBuilders {
             useTransferFromAndAquaPush: false,
             threshold: "", // no minimum output
             to: address(0),
+            deadline: 0,
             preTransferInHookData: "",
             postTransferInHookData: "",
             preTransferOutHookData: "",

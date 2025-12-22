@@ -333,6 +333,7 @@ contract ExampleInvariantUsage is Test, OpcodesDebug, CoreInvariants {
             useTransferFromAndAquaPush: false,
             threshold: thresholdData,
             to: address(this),
+            deadline: 0,
             hasPreTransferInCallback: false,
             hasPreTransferOutCallback: false,
             preTransferInHookData: "",

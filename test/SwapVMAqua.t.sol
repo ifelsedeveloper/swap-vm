@@ -100,6 +100,7 @@ contract SwapVMAquaTest is AquaSwapVMTest {
             useTransferFromAndAquaPush: false,
             threshold: "",
             to: address(0),
+            deadline: 0,
             preTransferInHookData: "",
             postTransferInHookData: "",
             preTransferOutHookData: "",
