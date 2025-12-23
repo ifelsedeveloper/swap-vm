@@ -2,11 +2,19 @@
 
 pragma solidity 0.8.30;
 
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+
 import { Calldata } from "../libs/Calldata.sol";
 import { Context, ContextLib } from "../libs/VM.sol";
 import { PeggedSwapMath } from "../libs/PeggedSwapMath.sol";
 
+uint256 constant ONE = 1e18;
+
 library PeggedSwapArgsBuilder {
+    error PeggedSwapInvalidArgsLength(uint256 length);
+    error PeggedSwapInvalidLinearWidth(uint256 linearWidth);
+    error PeggedSwapInvalidInitialBalances(uint256 x0, uint256 y0);
+
     /// @notice Arguments for the pegged swap instruction (stored in program)
     /// @param x0 Initial X reserve (normalization factor for x)
     /// @param y0 Initial Y reserve (normalization factor for y)
@@ -27,9 +35,13 @@ library PeggedSwapArgsBuilder {
     }
 
     function parse(bytes calldata data) internal pure returns (Args calldata args) {
+        require(data.length >= 96, PeggedSwapInvalidArgsLength(data.length)); // 3 * 32 bytes
         assembly ("memory-safe") {
             args := data.offset // Zero-copy to calldata pointer casting
         }
+
+        require(args.x0 > 0 && args.y0 > 0, PeggedSwapInvalidInitialBalances(args.x0, args.y0));
+        require(args.linearWidth <= 2 * ONE, PeggedSwapInvalidLinearWidth(args.linearWidth));
     }
 }
 
@@ -42,31 +54,20 @@ contract PeggedSwap {
     using Calldata for bytes;
     using ContextLib for Context;
 
-    uint256 private constant ONE = 1e18;
-
-    error PeggedSwapInvalidArgs();
-    error PeggedSwapInvalidBalances();
-
-    function _divRoundUp(uint256 a, uint256 b) private pure returns (uint256) {
-        return (a + b - 1) / b;
-    }
+    error PeggedSwapRecomputeDetected();
+    error PeggedSwapRequiresBothBalancesNonZero(uint256 balanceIn, uint256 balanceOut);
 
     /// @dev Square-root linear swap with direct calculation
     /// @param ctx Swap context
     /// @param args Swap configuration (X0, Y0, linearWidth) - 96 bytes
     /// @notice Calculates output amount directly using analytical solution
     function _peggedSwapGrowPriceRange2D(Context memory ctx, bytes calldata args) internal pure {
-        require(args.length >= 96, PeggedSwapInvalidArgs()); // 3 * 32 bytes
-
         PeggedSwapArgsBuilder.Args calldata config = PeggedSwapArgsBuilder.parse(args);
-
-        require(config.x0 > 0 && config.y0 > 0, PeggedSwapInvalidArgs());
-        require(config.linearWidth <= 2 * ONE, PeggedSwapInvalidArgs()); // A <= 2.0
 
         uint256 x0 = ctx.swap.balanceIn;
         uint256 y0 = ctx.swap.balanceOut;
 
-        require(x0 > 0 && y0 > 0, PeggedSwapInvalidBalances());
+        require(x0 > 0 && y0 > 0, PeggedSwapRequiresBothBalancesNonZero(x0, y0));
 
         // ╔═══════════════════════════════════════════════════════════════════════════╗
         // ║  PEGGED SWAP CURVE FOR PEGGED ASSETS                                      ║
@@ -99,39 +100,32 @@ contract PeggedSwap {
             config.linearWidth
         );
 
-        // Calculate new state based on swap direction
-        uint256 x1;
-        uint256 y1;
-
         if (ctx.query.isExactIn) {
+            require(ctx.swap.amountOut == 0, PeggedSwapRecomputeDetected());
             // ExactIn: calculate y1 from x1 = x0 + amountIn
-            x1 = x0 + ctx.swap.amountIn;
+            uint256 x1 = x0 + ctx.swap.amountIn;
 
             // Solve for y1: given x1, find y1 that maintains invariant
             uint256 u1 = (x1 * ONE) / config.x0;  // Round DOWN u1
             uint256 v1 = PeggedSwapMath.solve(u1, config.linearWidth, targetInvariant);
 
-            // Round UP y1 to ensure amountOut rounds DOWN
-            y1 = _divRoundUp(v1 * config.y0, ONE);
+            // Round UP y1 to ensure amountOut rounds DOWN (protects maker)
+            uint256 y1 = Math.ceilDiv(v1 * config.y0, ONE);
 
             ctx.swap.amountOut = y0 - y1;
         } else {
+            require(ctx.swap.amountIn == 0, PeggedSwapRecomputeDetected());
             // ExactOut: calculate x1 from y1 = y0 - amountOut
-            y1 = y0 - ctx.swap.amountOut;
+            uint256 y1 = y0 - ctx.swap.amountOut;
 
             // Solve for x1: given y1, find x1 that maintains invariant
-            uint256 v1 = (y1 * ONE) / config.y0;  // Round DOWN v1 (conservative)
+            uint256 v1 = (y1 * ONE) / config.y0;  // Round DOWN v1
             uint256 u1 = PeggedSwapMath.solve(v1, config.linearWidth, targetInvariant);
 
-            // Round UP x1 to ensure amountIn rounds UP
-            x1 = _divRoundUp(u1 * config.x0, ONE);
+            // Round UP x1 to ensure amountIn rounds UP (protects maker)
+            uint256 x1 = Math.ceilDiv(u1 * config.x0, ONE);
 
             ctx.swap.amountIn = x1 - x0;
         }
-
-        // Update balances
-        ctx.swap.balanceIn = x1;
-        ctx.swap.balanceOut = y1;
     }
 }
-

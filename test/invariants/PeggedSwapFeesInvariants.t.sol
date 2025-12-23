@@ -127,8 +127,6 @@ contract PeggedSwapFeesInvariants is Test, OpcodesDebug, CoreInvariants {
         InvariantConfig memory config = _getDefaultConfig();
         config.exactInTakerData = _signAndPackTakerData(order, true, 0);
         config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-        // Skip symmetry due to rounding in PeggedSwap math
-        config.skipSymmetry = true;
 
         assertAllInvariantsWithConfig(
             swapVM,
@@ -174,10 +172,10 @@ contract PeggedSwapFeesInvariants is Test, OpcodesDebug, CoreInvariants {
         InvariantConfig memory config = _getDefaultConfig();
         config.exactInTakerData = _signAndPackTakerData(order, true, 0);
         config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-        // TODO: need to research behavior - state-dependent due to scale
-        config.skipAdditivity = true;
-        // Skip symmetry due to rounding in PeggedSwap math
-        config.skipSymmetry = true;
+        // // TODO: need to research behavior - state-dependent due to scale
+        // config.skipAdditivity = true;
+        // // Skip symmetry due to rounding in PeggedSwap math
+        // config.skipSymmetry = true;
 
         assertAllInvariantsWithConfig(
             swapVM,
