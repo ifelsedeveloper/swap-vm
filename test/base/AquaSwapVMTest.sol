@@ -16,10 +16,9 @@ import { ISwapVM } from "../../src/interfaces/ISwapVM.sol";
 import { AquaSwapVMRouter } from "../../src/routers/AquaSwapVMRouter.sol";
 import { TakerTraitsLib } from "../../src/libs/TakerTraits.sol";
 
-import { TestConstants } from "./TestConstants.sol";
 import { AquaStrategyBuilders } from "./AquaStrategyBuilders.sol";
 
-contract AquaSwapVMTest is TestConstants, AquaStrategyBuilders {
+contract AquaSwapVMTest is AquaStrategyBuilders {
     struct SwapProgram {
         uint256 amount;
         MockTaker taker;
@@ -34,6 +33,8 @@ contract AquaSwapVMTest is TestConstants, AquaStrategyBuilders {
     MockTaker public taker;
     MockTaker public taker2;
 
+    address public protocolFeeRecipient;
+
     constructor() AquaStrategyBuilders(address(aqua)) {}
 
     function setUp() public override virtual {
@@ -43,6 +44,8 @@ contract AquaSwapVMTest is TestConstants, AquaStrategyBuilders {
 
         taker = new MockTaker(aqua, swapVM, address(this));
         taker2 = new MockTaker(aqua, swapVM, address(this));
+
+        protocolFeeRecipient = vm.addr(0x8888);
     }
 
     // ===== HELPER FUNCTIONS =====
@@ -66,6 +69,11 @@ contract AquaSwapVMTest is TestConstants, AquaStrategyBuilders {
             (address(swapProgram.tokenB), address(swapProgram.tokenA));
     }
 
+    function getProtocolRecipientBalances() public view returns (uint256 balanceA, uint256 balanceB) {
+        balanceA = tokenA.balanceOf(protocolFeeRecipient);
+        balanceB = tokenB.balanceOf(protocolFeeRecipient);
+    }
+
     function getAquaBalances(
         bytes32 strategyHash
     ) public view returns (uint256 balanceA, uint256 balanceB) {
@@ -82,8 +90,15 @@ contract AquaSwapVMTest is TestConstants, AquaStrategyBuilders {
     function mintTokenInToTaker(
         SwapProgram memory swapProgram
     ) public {
+        mintTokenInToTaker(swapProgram, swapProgram.amount);
+    }
+
+    function mintTokenInToTaker(
+        SwapProgram memory swapProgram,
+        uint256 amount
+    ) public {
         (TokenMock tokenIn, ) = getTokenPair(swapProgram);
-        tokenIn.mint(address(swapProgram.taker), swapProgram.amount);
+        tokenIn.mint(address(swapProgram.taker), amount);
     }
 
     function mintTokenOutToMaker(
@@ -106,6 +121,7 @@ contract AquaSwapVMTest is TestConstants, AquaStrategyBuilders {
             useTransferFromAndAquaPush: false,
             threshold: "", // no minimum output
             to: address(0),
+            deadline: 0,
             preTransferInHookData: "",
             postTransferInHookData: "",
             preTransferOutHookData: "",

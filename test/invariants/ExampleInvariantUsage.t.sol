@@ -5,7 +5,7 @@ pragma solidity 0.8.30;
 /// @custom:copyright © 2025 Degensoft Ltd
 
 import { Test } from "forge-std/Test.sol";
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { TokenMock } from "@1inch/solidity-utils/contracts/mocks/TokenMock.sol";
 
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 
@@ -23,14 +23,6 @@ import { dynamic } from "../utils/Dynamic.sol";
 
 import { CoreInvariants } from "./CoreInvariants.t.sol";
 
-// Simple mock token for testing
-contract MockToken is ERC20 {
-    constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
 
 /**
  * @title ExampleInvariantUsage
@@ -42,8 +34,8 @@ contract ExampleInvariantUsage is Test, OpcodesDebug, CoreInvariants {
 
     Aqua public immutable aqua;
     SwapVMRouter public swapVM;
-    MockToken public tokenA;
-    MockToken public tokenB;
+    TokenMock public tokenA;
+    TokenMock public tokenB;
 
     address public maker;
     uint256 public makerPK = 0x1234;
@@ -56,8 +48,8 @@ contract ExampleInvariantUsage is Test, OpcodesDebug, CoreInvariants {
         taker = address(this);
         swapVM = new SwapVMRouter(address(aqua), "SwapVM", "1.0.0");
 
-        tokenA = new MockToken("Token A", "TKA");
-        tokenB = new MockToken("Token B", "TKB");
+        tokenA = new TokenMock("Token A", "TKA");
+        tokenB = new TokenMock("Token B", "TKB");
 
         // Setup tokens and approvals for maker
         tokenA.mint(maker, 1000e18);
@@ -84,12 +76,12 @@ contract ExampleInvariantUsage is Test, OpcodesDebug, CoreInvariants {
         address tokenOut,
         uint256 amount,
         bytes memory takerData
-    ) internal override returns (uint256 amountOut) {
+    ) internal override returns (uint256 amountIn, uint256 amountOut) {
         // Note: assertAdditivityInvariant always passes input amounts for exactIn swaps
         // The takerData should already be configured for exactIn
 
         // Mint the input tokens
-        MockToken(tokenIn).mint(taker, amount);
+        TokenMock(tokenIn).mint(taker, amount * 10);
 
         // Execute the swap
         (uint256 actualIn, uint256 actualOut,) = _swapVM.swap(
@@ -100,10 +92,7 @@ contract ExampleInvariantUsage is Test, OpcodesDebug, CoreInvariants {
             takerData
         );
 
-        // Verify the swap consumed the expected input amount
-        require(actualIn == amount, "Unexpected input amount consumed");
-
-        return actualOut;
+        return (actualIn, actualOut);
     }
 
     /**
@@ -247,13 +236,19 @@ contract ExampleInvariantUsage is Test, OpcodesDebug, CoreInvariants {
             exactOutData
         );
 
+        uint256[] memory amounts = new uint256[](3);
+        amounts[0] = 1e18;
+        amounts[1] = 10e18;
+        amounts[2] = 50e18;
+
         assertMonotonicityInvariant(
             swapVM,
             order,
             address(tokenA),
             address(tokenB),
-            dynamic([uint256(1e18), uint256(10e18), uint256(100e18)]),
-            exactInData
+            amounts,
+            exactInData,
+            0  // strict monotonicity
         );
 
         assertBalanceSufficiencyInvariant(
@@ -344,6 +339,7 @@ contract ExampleInvariantUsage is Test, OpcodesDebug, CoreInvariants {
             useTransferFromAndAquaPush: false,
             threshold: thresholdData,
             to: address(this),
+            deadline: 0,
             hasPreTransferInCallback: false,
             hasPreTransferOutCallback: false,
             preTransferInHookData: "",

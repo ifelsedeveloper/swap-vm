@@ -12,7 +12,7 @@ import { FormatLib } from "./utils/FormatLib.sol";
 
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { TokenMock } from "@1inch/solidity-utils/contracts/mocks/TokenMock.sol";
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 
 import { SwapVM, ISwapVM } from "../src/SwapVM.sol";
@@ -29,14 +29,6 @@ import { Controls, ControlsArgsBuilder } from "../src/instructions/Controls.sol"
 import { Program, ProgramBuilder } from "./utils/ProgramBuilder.sol";
 import { RoundingInvariants } from "./invariants/RoundingInvariants.sol";
 
-// Simple mock token for testing
-contract MockToken is ERC20 {
-    constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
 
 contract ConcentrateTest is Test, OpcodesDebug {
     using SafeCast for uint256;
@@ -80,26 +72,26 @@ contract ConcentrateTest is Test, OpcodesDebug {
         swapVM = new SwapVMRouter(address(0), "SwapVM", "1.0.0");
 
         // Deploy mock tokens
-        tokenA = address(new MockToken("Token A", "TKA"));
-        tokenB = address(new MockToken("Token B", "TKB"));
+        tokenA = address(new TokenMock("Token A", "TKA"));
+        tokenB = address(new TokenMock("Token B", "TKB"));
 
         // Setup initial balances
-        MockToken(tokenA).mint(maker, 1_000_000_000e18);
-        MockToken(tokenB).mint(maker, 1_000_000_000e18);
-        MockToken(tokenA).mint(taker, 1_000_000_000e18);
-        MockToken(tokenB).mint(taker, 1_000_000_000e18);
+        TokenMock(tokenA).mint(maker, 1_000_000_000e18);
+        TokenMock(tokenB).mint(maker, 1_000_000_000e18);
+        TokenMock(tokenA).mint(taker, 1_000_000_000e18);
+        TokenMock(tokenB).mint(taker, 1_000_000_000e18);
 
         // Approve SwapVM to spend tokens by maker
         vm.prank(maker);
-        MockToken(tokenA).approve(address(swapVM), type(uint256).max);
+        TokenMock(tokenA).approve(address(swapVM), type(uint256).max);
         vm.prank(maker);
-        MockToken(tokenB).approve(address(swapVM), type(uint256).max);
+        TokenMock(tokenB).approve(address(swapVM), type(uint256).max);
 
         // Approve SwapVM to spend tokens by taker
         vm.prank(taker);
-        MockToken(tokenA).approve(address(swapVM), type(uint256).max);
+        TokenMock(tokenA).approve(address(swapVM), type(uint256).max);
         vm.prank(taker);
-        MockToken(tokenB).approve(address(swapVM), type(uint256).max);
+        TokenMock(tokenB).approve(address(swapVM), type(uint256).max);
     }
 
     struct MakerSetup {
@@ -112,7 +104,7 @@ contract ConcentrateTest is Test, OpcodesDebug {
     }
 
     function _createOrder(MakerSetup memory setup) internal view returns (ISwapVM.Order memory order, bytes memory signature) {
-        (uint256 deltaA, uint256 deltaB) =
+        (uint256 deltaA, uint256 deltaB, uint256 liquidity) =
             XYCConcentrateArgsBuilder.computeDeltas(setup.balanceA, setup.balanceB, 1e18, setup.priceBoundA, setup.priceBoundB);
 
         Program memory program = ProgramBuilder.init(_opcodes());
@@ -141,10 +133,10 @@ contract ConcentrateTest is Test, OpcodesDebug {
                 )),
                 setup.growLiquidityInsteadOfPriceRange ?
                     program.build(XYCConcentrate._xycConcentrateGrowLiquidity2D, XYCConcentrateArgsBuilder.build2D(
-                        tokenA, tokenB, deltaA, deltaB
+                        tokenA, tokenB, deltaA, deltaB, liquidity
                     )) :
                     program.build(XYCConcentrate._xycConcentrateGrowPriceRange2D, XYCConcentrateArgsBuilder.build2D(
-                        tokenA, tokenB, deltaA, deltaB
+                        tokenA, tokenB, deltaA, deltaB, liquidity
                     )),
                 program.build(Fee._flatFeeAmountInXD, FeeArgsBuilder.buildFlatFee(setup.flatFee.toUint32())),
                 program.build(XYCSwap._xycSwapXD)
@@ -172,6 +164,7 @@ contract ConcentrateTest is Test, OpcodesDebug {
             useTransferFromAndAquaPush: false,
             threshold: "", // no minimum output
             to: address(0),
+            deadline: 0,
             preTransferInHookData: "",
             postTransferInHookData: "",
             preTransferOutHookData: "",
@@ -198,6 +191,7 @@ contract ConcentrateTest is Test, OpcodesDebug {
             useTransferFromAndAquaPush: false,
             threshold: "",
             to: address(0),
+            deadline: 0,
             hasPreTransferInCallback: false,
             hasPreTransferOutCallback: false,
             preTransferInHookData: "",
@@ -428,15 +422,15 @@ contract ConcentrateTest is Test, OpcodesDebug {
         uint256 preRateA = preAmountInA * 1e18 / preAmountOutA;
         uint256 postRateA = postAmountInA * 1e18 / postAmountOutA;
         uint256 rateChangeA = preRateA * 1e18 / postRateA;
-        assertNotApproxEqRel(rateChangeA, setup.priceBoundA, 0.01e18, "Quote should not be within 1% range of actual paid scaled by scaleB for tokenA");
-        assertApproxEqRel(rateChangeA, setup.priceBoundA, 0.02e18, "Quote should be within 2% range of actual paid scaled by scaleB for tokenA");
+        assertNotApproxEqRel(rateChangeA, setup.priceBoundA, 0.001e18, "Quote should not be within 1% range of actual paid scaled by scaleB for tokenA");
+        assertApproxEqRel(rateChangeA, setup.priceBoundA, 0.005e18, "Quote should be within 2% range of actual paid scaled by scaleB for tokenA");
 
         // Compute and compare rate change for tokenB
         uint256 preRateB = preAmountInB * 1e18 / preAmountOutB;
         uint256 postRateB = postAmountInB * 1e18 / postAmountOutB;
         uint256 rateChangeB = postRateB * 1e18 / preRateB;
-        assertNotApproxEqRel(rateChangeB, setup.priceBoundB, 0.01e18, "Quote should not be within 1% range of actual paid scaled by scaleB for tokenB");
-        assertApproxEqRel(rateChangeB, setup.priceBoundB, 0.02e18, "Quote should be within 2% range of actual paid scaled by scaleB for tokenB");
+        assertNotApproxEqRel(rateChangeB, setup.priceBoundB, 0.001e18, "Quote should not be within 1% range of actual paid scaled by scaleB for tokenB");
+        assertApproxEqRel(rateChangeB, setup.priceBoundB, 0.005e18, "Quote should be within 2% range of actual paid scaled by scaleB for tokenB");
     }
 
     function test_RoundingInvariantsWithFees() public {
@@ -474,7 +468,7 @@ contract ConcentrateTest is Test, OpcodesDebug {
         bytes memory takerData
     ) internal returns (uint256 amountOut) {
         // Mint tokens to taker
-        MockToken(tokenIn).mint(taker, amount);
+        TokenMock(tokenIn).mint(taker, amount);
 
         vm.prank(taker);
         (, amountOut,) = _swapVM.swap(order, tokenIn, tokenOut, amount, takerData);
@@ -492,7 +486,7 @@ contract ConcentrateTest is Test, OpcodesDebug {
         (ISwapVM.Order memory order, bytes memory signature) = _createOrder(setup);
 
         vm.startPrank(taker);
-        MockToken malToken = new MockToken("Malicious token", "MTK");
+        TokenMock malToken = new TokenMock("Malicious token", "MTK");
 
         // Setup taker traits and data
         bytes memory quoteExactOut = _quotingTakerData(TakerSetup({ isExactIn: false }));

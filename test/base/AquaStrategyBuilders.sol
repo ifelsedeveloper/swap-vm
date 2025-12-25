@@ -19,6 +19,7 @@ import { AquaOpcodesDebug } from "../../src/opcodes/AquaOpcodesDebug.sol";
 import { XYCConcentrate, XYCConcentrateArgsBuilder } from "../../src/instructions/XYCConcentrate.sol";
 import { XYCSwap } from "../../src/instructions/XYCSwap.sol";
 import { Fee, FeeArgsBuilder } from "../../src/instructions/Fee.sol";
+import { Controls } from "../../src/instructions/Controls.sol";
 
 import { MakerTraitsLib } from "../../src/libs/MakerTraits.sol";
 
@@ -81,7 +82,7 @@ abstract contract AquaStrategyBuilders is TestConstants, Test, AquaOpcodesDebug 
 
         if(setup.swapType == SwapType.CONCENTRATE_GROW_LIQUIDITY ||
             setup.swapType == SwapType.CONCENTRATE_GROW_PRICE_RANGE) {
-            (uint256 deltaA, uint256 deltaB) = XYCConcentrateArgsBuilder.computeDeltas(
+            (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
                 setup.balanceA,
                 setup.balanceB,
                 setup.balanceB * TestConstants.ONE / setup.balanceA,
@@ -96,7 +97,8 @@ abstract contract AquaStrategyBuilders is TestConstants, Test, AquaOpcodesDebug 
                     address(tokenA),
                     address(tokenB),
                     deltaA,
-                    deltaB
+                    deltaB,
+                    liquidity
                 )
             );
         }
@@ -107,7 +109,8 @@ abstract contract AquaStrategyBuilders is TestConstants, Test, AquaOpcodesDebug 
             setup.protocolFeeBps > 0 ? p.build(Fee._aquaProtocolFeeAmountOutXD, FeeArgsBuilder.buildProtocolFee(setup.protocolFeeBps, setup.protocolFeeRecipient)) : bytes(""),
             setup.progressiveFeeBps > 0 ? p.build(Fee._progressiveFeeInXD, FeeArgsBuilder.buildProgressiveFee(setup.progressiveFeeBps)) : bytes(""),
             concentrateProgram,
-            p.build(XYCSwap._xycSwapXD)
+            p.build(XYCSwap._xycSwapXD),
+            p.build(Controls._salt, abi.encodePacked(vm.randomUint())) // ensure unique order hash
         );
     }
 
