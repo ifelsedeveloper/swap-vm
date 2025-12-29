@@ -192,6 +192,8 @@ contract Fee {
     ///   - Protected by TransientLock on orderHash level in SwapVM.swap()
     ///   - Fee calculation and state changes happen AFTER external call
     ///   - feeProvider MUST NOT rely on intermediate swap state
+    ///   CAUTION: Takers should verify feeProvider trustworthiness before executing.
+    ///      A malicious feeProvider could return large data causing high gas consumption.
     /// @param args.feeProvider | 20 bytes (address of the protocol fee provider)
     function _dynamicProtocolFeeAmountInXD(Context memory ctx, bytes calldata args) internal {
         address feeProvider = FeeArgsBuilder.parseDynamicProtocolFee(args);
@@ -231,6 +233,8 @@ contract Fee {
     ///   - Protected by TransientLock on orderHash level in SwapVM.swap()
     ///   - Fee calculation and state changes happen AFTER external call
     ///   - feeProvider MUST NOT rely on intermediate swap state
+    ///   CAUTION: Takers should verify feeProvider trustworthiness before executing.
+    ///      A malicious feeProvider could return large data causing high gas consumption.
     /// @param args.feeProvider | 20 bytes (address of the protocol fee provider)
     function _aquaDynamicProtocolFeeAmountInXD(Context memory ctx, bytes calldata args) internal {
         address feeProvider = FeeArgsBuilder.parseDynamicProtocolFee(args);
