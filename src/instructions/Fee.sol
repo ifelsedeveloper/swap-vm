@@ -64,7 +64,9 @@ contract Fee {
     using ContextLib for Context;
 
     error FeeShouldBeAppliedBeforeSwapAmountsComputation();
-    error FeeDynamicProtocolMissingTo();
+    error FeeDynamicProtocolInvalidRecipient();
+    error FeeBpsOutOfRange(uint256 feeBps);
+    error FeeProtocolProviderFailedCall();
 
     IAqua private immutable _AQUA;
 
@@ -184,6 +186,12 @@ contract Fee {
         }
     }
 
+    /// @notice Dynamic protocol fee with external fee provider
+    /// @dev REENTRANCY SAFETY:
+    ///   - Uses staticcall preventing state changes by feeProvider
+    ///   - Protected by TransientLock on orderHash level in SwapVM.swap()
+    ///   - Fee calculation and state changes happen AFTER external call
+    ///   - feeProvider MUST NOT rely on intermediate swap state
     /// @param args.feeProvider | 20 bytes (address of the protocol fee provider)
     function _dynamicProtocolFeeAmountInXD(Context memory ctx, bytes calldata args) internal {
         address feeProvider = FeeArgsBuilder.parseDynamicProtocolFee(args);
@@ -191,18 +199,23 @@ contract Fee {
         address to;
 
         if (feeProvider != address(0)) {
-            (feeBps, to) = IProtocolFeeProvider(feeProvider).getFeeBpsAndRecipient(
-                ctx.query.orderHash,
+            (bool success, bytes memory result) = feeProvider.staticcall(abi.encodeCall(
+                IProtocolFeeProvider.getFeeBpsAndRecipient,
+                (ctx.query.orderHash,
                 ctx.query.maker,
                 ctx.query.taker,
                 ctx.query.tokenIn,
                 ctx.query.tokenOut,
-                ctx.query.isExactIn
-            );
+                ctx.query.isExactIn)
+            ));
+
+            require(success, FeeProtocolProviderFailedCall());
+            (feeBps, to) = abi.decode(result, (uint32, address));
+            require(feeBps <= BPS, FeeBpsOutOfRange(feeBps));
         }
 
         if (feeBps != 0) {
-            require(to != address(0), FeeDynamicProtocolMissingTo());
+            require(to != address(0), FeeDynamicProtocolInvalidRecipient());
 
             uint256 feeAmountIn = _feeAmountIn(ctx, feeBps);
 
@@ -212,6 +225,12 @@ contract Fee {
         }
     }
 
+    /// @notice Dynamic protocol fee with external fee provider (Aqua version)
+    /// @dev REENTRANCY SAFETY:
+    ///   - Uses staticcall preventing state changes by feeProvider
+    ///   - Protected by TransientLock on orderHash level in SwapVM.swap()
+    ///   - Fee calculation and state changes happen AFTER external call
+    ///   - feeProvider MUST NOT rely on intermediate swap state
     /// @param args.feeProvider | 20 bytes (address of the protocol fee provider)
     function _aquaDynamicProtocolFeeAmountInXD(Context memory ctx, bytes calldata args) internal {
         address feeProvider = FeeArgsBuilder.parseDynamicProtocolFee(args);
@@ -219,18 +238,23 @@ contract Fee {
         address to;
 
         if (feeProvider != address(0)) {
-            (feeBps, to) = IProtocolFeeProvider(feeProvider).getFeeBpsAndRecipient(
-                ctx.query.orderHash,
+            (bool success, bytes memory result) = feeProvider.staticcall(abi.encodeCall(
+                IProtocolFeeProvider.getFeeBpsAndRecipient,
+                (ctx.query.orderHash,
                 ctx.query.maker,
                 ctx.query.taker,
                 ctx.query.tokenIn,
                 ctx.query.tokenOut,
-                ctx.query.isExactIn
-            );
+                ctx.query.isExactIn)
+            ));
+
+            require(success, FeeProtocolProviderFailedCall());
+            (feeBps, to) = abi.decode(result, (uint32, address));
+            require(feeBps <= BPS, FeeBpsOutOfRange(feeBps));
         }
 
         if (feeBps != 0) {
-            require(to != address(0), FeeDynamicProtocolMissingTo());
+            require(to != address(0), FeeDynamicProtocolInvalidRecipient());
 
             uint256 feeAmountIn = _feeAmountIn(ctx, feeBps);
 

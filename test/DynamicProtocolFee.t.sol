@@ -21,6 +21,7 @@ import { XYCSwap } from "../src/instructions/XYCSwap.sol";
 import { Fee, FeeArgsBuilder } from "../src/instructions/Fee.sol";
 
 import { ProtocolFeeProviderMock } from "../mocks/ProtocolFeeProviderMock.sol";
+import { InvalidProtocolFeeProviderMock } from "./mocks/ProtocolFeeProviderMock.sol";
 
 import { Program, ProgramBuilder } from "./utils/ProgramBuilder.sol";
 
@@ -42,6 +43,7 @@ contract DynamicProtocolFeeTest is Test, OpcodesDebug {
     address public protocolFeeRecipient;
 
     ProtocolFeeProviderMock public feeProvider;
+    InvalidProtocolFeeProviderMock public invalidFeeProvider;
 
     function setUp() public {
         // Setup maker with known private key for signing
@@ -76,6 +78,8 @@ contract DynamicProtocolFeeTest is Test, OpcodesDebug {
 
         // Deploy fee provider mock with default values
         feeProvider = new ProtocolFeeProviderMock(0.10e9, protocolFeeRecipient, address(this));
+        // Deploy invalid fee provider mock
+        invalidFeeProvider = new InvalidProtocolFeeProviderMock();
     }
 
     struct MakerSetup {
@@ -302,7 +306,49 @@ contract DynamicProtocolFeeTest is Test, OpcodesDebug {
 
         uint256 amountIn = 10e18;
         vm.prank(taker);
-        vm.expectRevert(Fee.FeeDynamicProtocolMissingTo.selector);
+        vm.expectRevert(Fee.FeeDynamicProtocolInvalidRecipient.selector);
+        swapVM.swap(order, tokenA, tokenB, amountIn, exactInTakerDataSwap);
+    }
+
+    function test_DynamicProtocolFee_ProviderReturnsHighFee_Reverts() public {
+        // Setup fee provider with excessive fee
+        feeProvider.setFeeBpsAndRecipient(1.5e9, protocolFeeRecipient); // 150%
+
+        MakerSetup memory setup = MakerSetup({
+            balanceA: 100e18,
+            balanceB: 200e18,
+            dynamicFeeProvider: address(feeProvider),
+            flatInFeeBps: 0,
+            flatOutFeeBps: 0
+        });
+        (ISwapVM.Order memory order, bytes memory signature) = _createOrder(setup);
+
+        bytes memory exactInTakerData = _quotingTakerData(TakerSetup({ isExactIn: true }));
+        bytes memory exactInTakerDataSwap = _swappingTakerData(exactInTakerData, signature);
+
+        uint256 amountIn = 10e18;
+        vm.prank(taker);
+        vm.expectRevert(abi.encodeWithSelector(Fee.FeeBpsOutOfRange.selector, 1.5e9));
+        swapVM.swap(order, tokenA, tokenB, amountIn, exactInTakerDataSwap);
+    }
+
+    function test_DynamicProtocolFee_ProviderReturnsFailedCall_Reverts() public {
+        // Use invalid address as provider
+        MakerSetup memory setup = MakerSetup({
+            balanceA: 100e18,
+            balanceB: 200e18,
+            dynamicFeeProvider: address(invalidFeeProvider),
+            flatInFeeBps: 0,
+            flatOutFeeBps: 0
+        });
+        (ISwapVM.Order memory order, bytes memory signature) = _createOrder(setup);
+
+        bytes memory exactInTakerData = _quotingTakerData(TakerSetup({ isExactIn: true }));
+        bytes memory exactInTakerDataSwap = _swappingTakerData(exactInTakerData, signature);
+
+        uint256 amountIn = 10e18;
+        vm.prank(taker);
+        vm.expectRevert(Fee.FeeProtocolProviderFailedCall.selector);
         swapVM.swap(order, tokenA, tokenB, amountIn, exactInTakerDataSwap);
     }
 
