@@ -19,10 +19,10 @@ import { OpcodesDebug } from "../src/opcodes/OpcodesDebug.sol";
 import { Balances, BalancesArgsBuilder } from "../src/instructions/Balances.sol";
 import { XYCSwap } from "../src/instructions/XYCSwap.sol";
 import { Fee, FeeArgsBuilder } from "../src/instructions/Fee.sol";
+import { FeeExperimental } from "../src/instructions/FeeExperimental.sol";
 import { Debug } from "../src/instructions/Debug.sol";
 
 import { Program, ProgramBuilder } from "./utils/ProgramBuilder.sol";
-import { console } from "forge-std/console.sol";
 
 uint256 constant ONE = 1e18;
 uint256 constant BPS = 1e9;
@@ -94,7 +94,7 @@ contract ProtocolFeeTest is Test, OpcodesDebug {
                 protocolFeeOnAmountIn
                     ? program.build(Fee._protocolFeeAmountInXD,
                         FeeArgsBuilder.buildProtocolFee(setup.protocolFeeBps, protocolFeeRecipient))
-                    : program.build(Fee._protocolFeeAmountOutXD,
+                    : program.build(FeeExperimental._protocolFeeAmountOutXD,
                         FeeArgsBuilder.buildProtocolFee(setup.protocolFeeBps, protocolFeeRecipient))
             ) : bytes(""),
             // 1. Set initial token balances
@@ -107,7 +107,7 @@ contract ProtocolFeeTest is Test, OpcodesDebug {
             setup.flatInFeeBps > 0 ? program.build(Fee._flatFeeAmountInXD,
                 FeeArgsBuilder.buildFlatFee(setup.flatInFeeBps)) : bytes(""),
             // 3. Apply flat feeOut (optional)
-            setup.flatOutFeeBps > 0 ? program.build(Fee._flatFeeAmountOutXD,
+            setup.flatOutFeeBps > 0 ? program.build(FeeExperimental._flatFeeAmountOutXD,
                 FeeArgsBuilder.buildFlatFee(setup.flatOutFeeBps)) : bytes(""),
             // 4. Perform the swap
             program.build(XYCSwap._xycSwapXD)
