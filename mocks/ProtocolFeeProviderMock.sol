@@ -98,7 +98,7 @@ contract ProtocolFeeProviderMock is IProtocolFeeProvider, Ownable {
         assembly ("memory-safe") {
             let params := sload(_params.slot)
             feeBps := and(params, 0xffffffff) // feeBps is in the lower 4 bytes
-            to := and(shr(32, params), 0xffffffffffffffffffffffffffffffffffffffff) // to is the next 20 bytes
+            to := shr(32, params) // to is the next 20 bytes
         }
     }
 }
