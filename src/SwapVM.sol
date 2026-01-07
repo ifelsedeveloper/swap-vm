@@ -61,6 +61,8 @@ abstract contract SwapVM is EIP712 {
         AQUA = IAqua(aqua);
     }
 
+    receive() external payable {}
+
     function asView() external view returns (ISwapVM) {
         return ISwapVM(address(this));
     }
