@@ -30,7 +30,6 @@ Solidity Best Practices
 - Design upgradeable contracts using proven patterns like the proxy pattern when necessary.
 - Implement comprehensive events for all significant state changes.
 - Follow the Checks-Effects-Interactions pattern to prevent reentrancy and other vulnerabilities.
-- Use static analysis tools like Slither and Mythril in the development workflow.
 - Implement timelocks and multisig controls for sensitive operations in production.
 - Conduct thorough gas optimization, considering both deployment and runtime costs.
 - Use Solidity 0.8.0+ for built-in overflow/underflow protection.

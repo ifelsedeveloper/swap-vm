@@ -103,17 +103,6 @@ test_Reverse_B_to_A();
 assertEq(invariantForward, invariantReverse, "Invariant mismatch");
 ```
 
-## Static Analysis
-
-Run before committing:
-```bash
-# Slither analysis
-slither .
-
-# Mythril (if configured)
-myth analyze src/SwapVM.sol
-```
-
 ## Audit Preparation
 
 - Document all external calls and their trust assumptions

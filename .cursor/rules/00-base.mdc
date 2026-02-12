@@ -36,6 +36,9 @@ SwapVM (abstract)
 
 ## Key Locations
 
+- Core VM: `src/SwapVM.sol` (abstract base)
 - Instructions: `src/instructions/`
+- Opcodes: `src/opcodes/` (Opcodes, LimitOpcodes, AquaOpcodes)
 - Libraries: `src/libs/` (VM.sol, MakerTraits.sol, TakerTraits.sol)
 - Routers: `src/routers/`
+- Interfaces: `src/interfaces/`
