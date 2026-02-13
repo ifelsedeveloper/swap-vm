@@ -71,7 +71,20 @@ contract Fee {
     /// @param args.feeBps | 4 bytes (fee in bps, 1e9 = 100%)
     function _flatFeeAmountInXD(Context memory ctx, bytes calldata args) internal {
         uint256 feeBps = FeeArgsBuilder.parseFlatFee(args);
-        _feeAmountIn(ctx, feeBps);
+        require(ctx.swap.amountIn == 0 || ctx.swap.amountOut == 0, FeeShouldBeAppliedBeforeSwapAmountsComputation());
+
+        // This is the same _feeAmountIn call, just with rounding up.
+        if (ctx.query.isExactIn) {
+            // Decrease amountIn by fee only during swap-instruction
+            uint256 takerDefinedAmountIn = ctx.swap.amountIn;
+            ctx.swap.amountIn -= Math.ceilDiv(ctx.swap.amountIn * feeBps, BPS);
+            ctx.runLoop();
+            ctx.swap.amountIn = takerDefinedAmountIn;
+        } else {
+            // Increase amountIn by fee after swap-instruction
+            ctx.runLoop();
+            ctx.swap.amountIn += Math.ceilDiv(ctx.swap.amountIn * feeBps, BPS - feeBps);
+        }
     }
 
     /// @param args.feeBps | 4 bytes (fee in bps, 1e9 = 100%)
