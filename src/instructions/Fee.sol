@@ -74,6 +74,11 @@ contract Fee {
         _feeAmountIn(ctx, feeBps);
     }
 
+    /// @notice Protocol fee on amountIn — transfers fee from maker to recipient via safeTransferFrom.
+    /// @dev IMPORTANT: The maker MUST already hold sufficient tokenIn balance and have approved this contract
+    ///   BEFORE the swap is executed. The fee transfer occurs during program execution (inside runLoop),
+    ///   which is before SwapVM completes the taker→maker tokenIn transfer. If the maker lacks tokenIn
+    ///   balance or allowance, the swap will revert.
     /// @param args.feeBps | 4 bytes (fee in bps, 1e9 = 100%)
     /// @param args.to     | 20 bytes (address to send pulled tokens to)
     function _protocolFeeAmountInXD(Context memory ctx, bytes calldata args) internal {
@@ -85,6 +90,11 @@ contract Fee {
         }
     }
 
+    /// @notice Protocol fee on amountIn for Aqua — pulls fee from maker's Aqua balance to recipient.
+    /// @dev IMPORTANT: The maker MUST already hold sufficient tokenIn balance in Aqua BEFORE the swap
+    ///   is executed. The fee pull occurs during program execution (inside runLoop), which is before
+    ///   SwapVM completes the taker→maker tokenIn transfer. If the maker's Aqua tokenIn balance is
+    ///   insufficient, the swap will revert.
     /// @param args.feeBps | 4 bytes (fee in bps, 1e9 = 100%)
     /// @param args.to     | 20 bytes (address to send pulled tokens to)
     function _aquaProtocolFeeAmountInXD(Context memory ctx, bytes calldata args) internal {
@@ -98,6 +108,10 @@ contract Fee {
     }
 
     /// @notice Dynamic protocol fee with external fee provider
+    /// @dev IMPORTANT: The maker MUST already hold sufficient tokenIn balance and have approved this contract
+    ///   BEFORE the swap is executed. The fee transfer occurs during program execution (inside runLoop),
+    ///   which is before SwapVM completes the taker→maker tokenIn transfer. If the maker lacks tokenIn
+    ///   balance or allowance, the swap will revert.
     /// @dev REENTRANCY SAFETY:
     ///   - Uses staticcall preventing state changes by feeProvider
     ///   - Protected by TransientLock on orderHash level in SwapVM.swap()
@@ -139,6 +153,10 @@ contract Fee {
     }
 
     /// @notice Dynamic protocol fee with external fee provider (Aqua version)
+    /// @dev IMPORTANT: The maker MUST already hold sufficient tokenIn balance in Aqua BEFORE the swap
+    ///   is executed. The fee pull occurs during program execution (inside runLoop), which is before
+    ///   SwapVM completes the taker→maker tokenIn transfer. If the maker's Aqua tokenIn balance is
+    ///   insufficient, the swap will revert.
     /// @dev REENTRANCY SAFETY:
     ///   - Uses staticcall preventing state changes by feeProvider
     ///   - Protected by TransientLock on orderHash level in SwapVM.swap()
