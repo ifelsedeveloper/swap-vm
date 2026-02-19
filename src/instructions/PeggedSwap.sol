@@ -87,7 +87,7 @@ contract PeggedSwap {
     using ContextLib for Context;
 
     error PeggedSwapRecomputeDetected();
-    error PeggedSwapRequiresBothBalancesNonZero(uint256 balanceIn, uint256 balanceOut);
+    error PeggedSwapBothBalancesZero();
 
     /// @dev Square-root linear swap with direct calculation
     /// @param ctx Swap context
@@ -100,7 +100,7 @@ contract PeggedSwap {
         uint256 x0_raw = ctx.swap.balanceIn;
         uint256 y0_raw = ctx.swap.balanceOut;
 
-        require(x0_raw > 0 && y0_raw > 0, PeggedSwapRequiresBothBalancesNonZero(x0_raw, y0_raw));
+        require(x0_raw | y0_raw != 0, PeggedSwapBothBalancesZero());
 
         // ╔═══════════════════════════════════════════════════════════════════════════╗
         // ║  PEGGED SWAP CURVE FOR PEGGED ASSETS                                      ║

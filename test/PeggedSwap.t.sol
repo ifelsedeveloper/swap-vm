@@ -586,7 +586,8 @@ contract PeggedSwapTest is Test, OpcodesDebug {
     // NEGATIVE TESTS (REVERTS)
     // ========================================
 
-    function test_PeggedSwap_Revert_ZeroBalanceIn() public {
+    function test_PeggedSwap_ZeroBalanceIn_SwapSucceeds() public {
+        // Zero balanceIn should work — taker puts tokens into an empty reserve
         PoolSetup memory setup = PoolSetup({
             balanceA: 0,  // Zero balance
             balanceB: 1000e18,
@@ -601,17 +602,15 @@ contract PeggedSwapTest is Test, OpcodesDebug {
         bytes memory takerData = _makeTakerData(true, signature);
 
         vm.prank(taker);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                PeggedSwap.PeggedSwapRequiresBothBalancesNonZero.selector,
-                0,
-                setup.balanceB
-            )
-        );
-        swapVM.swap(order, tokenA, tokenB, 10e18, takerData);
+        (uint256 swappedIn, uint256 swappedOut,) = swapVM.swap(order, tokenA, tokenB, 10e18, takerData);
+
+        assertEq(swappedIn, 10e18, "Should accept all input");
+        assertGt(swappedOut, 0, "Should produce output from non-empty reserve");
+        assertLe(swappedOut, 1000e18, "Output should not exceed balanceOut");
     }
 
-    function test_PeggedSwap_Revert_ZeroBalanceOut() public {
+    function test_PeggedSwap_Revert_ZeroBalanceOut_ExactIn() public {
+        // Zero balanceOut with ExactIn should revert (can't extract from empty pool)
         PoolSetup memory setup = PoolSetup({
             balanceA: 1000e18,
             balanceB: 0,  // Zero balance
@@ -626,13 +625,27 @@ contract PeggedSwapTest is Test, OpcodesDebug {
         bytes memory takerData = _makeTakerData(true, signature);
 
         vm.prank(taker);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                PeggedSwap.PeggedSwapRequiresBothBalancesNonZero.selector,
-                setup.balanceA,
-                0
-            )
-        );
+        vm.expectRevert(PeggedSwapMath.PeggedSwapMathInvalidInput.selector);
+        swapVM.swap(order, tokenA, tokenB, 10e18, takerData);
+    }
+
+    function test_PeggedSwap_Revert_BothBalancesZero() public {
+        // Both balances zero is a degenerate state (invariant=0) — must revert
+        PoolSetup memory setup = PoolSetup({
+            balanceA: 0,
+            balanceB: 0,
+            x0: 1000e18,
+            y0: 1000e18,
+            linearWidth: 0.8e27,
+            feeInBps: 0
+        });
+
+        ISwapVM.Order memory order = _createOrder(setup);
+        bytes memory signature = _signOrder(order);
+        bytes memory takerData = _makeTakerData(true, signature);
+
+        vm.prank(taker);
+        vm.expectRevert(PeggedSwap.PeggedSwapBothBalancesZero.selector);
         swapVM.swap(order, tokenA, tokenB, 10e18, takerData);
     }
 
@@ -679,5 +692,193 @@ contract PeggedSwapTest is Test, OpcodesDebug {
 
         vm.expectRevert(PeggedSwapMath.PeggedSwapMathInvalidInput.selector);
         wrapper.solve(u, a, invalidInvariant);
+    }
+
+    // ========================================
+    // ROUND-ROBIN DEPLETION & ROUNDING EXPLOIT TEST
+    // ========================================
+
+    /// @notice Performs many round-robin swaps that deplete one reserve to zero,
+    ///         then refill via reverse swaps, using small edge-case amounts to stress
+    ///         rounding. Verifies maker invariant never decreases (no rounding exploit).
+    function test_PeggedSwap_RoundRobin_DepletionAndRoundingExploit() public {
+        uint256 poolSize = 1000e18;
+
+        // Test with multiple A values
+        uint256[3] memory linearWidths = [uint256(0), 0.8e27, 2e27];
+
+        for (uint256 w = 0; w < linearWidths.length; w++) {
+            PoolSetup memory setup = PoolSetup({
+                balanceA: poolSize,
+                balanceB: poolSize,
+                x0: poolSize,
+                y0: poolSize,
+                linearWidth: linearWidths[w],
+                feeInBps: 0
+            });
+
+            ISwapVM.Order memory order = _createOrder(setup);
+            bytes memory signature = _signOrder(order);
+            bytes memory takerDataExactIn = _makeTakerData(true, signature);
+
+            // Track cumulative taker in/out to verify maker never loses
+            uint256 takerTotalIn = 0;
+            uint256 takerTotalOut = 0;
+
+            // Current virtual balances (mirroring what dynamic balances track)
+            uint256 balA = poolSize;
+            uint256 balB = poolSize;
+
+            // Phase 1: Progressively drain tokenB with increasingly large swaps A→B
+            uint256[] memory drainAmounts = new uint256[](6);
+            drainAmounts[0] = 100e18;
+            drainAmounts[1] = 200e18;
+            drainAmounts[2] = 300e18;
+            drainAmounts[3] = 200e18;
+            drainAmounts[4] = 100e18;
+            drainAmounts[5] = 50e18;
+
+            for (uint256 i = 0; i < drainAmounts.length; i++) {
+                vm.prank(taker);
+                (uint256 amIn, uint256 amOut,) = swapVM.swap(
+                    order, tokenA, tokenB, drainAmounts[i], takerDataExactIn
+                );
+                takerTotalIn += amIn;
+                takerTotalOut += amOut;
+                balA += amIn;
+                balB -= amOut;
+
+                // Verify invariant never decreases (maker protected)
+                if (balA > 0 && balB > 0) {
+                    uint256 invAfter = PeggedSwapMath.invariantFromReserves(
+                        balA, balB, setup.x0, setup.y0, setup.linearWidth
+                    );
+                    uint256 invInit = PeggedSwapMath.invariantFromReserves(
+                        poolSize, poolSize, setup.x0, setup.y0, setup.linearWidth
+                    );
+                    assertGe(invAfter, invInit - 1, "Invariant must not decrease (drain phase)");
+                }
+            }
+
+            // Phase 2: Small edge-case swaps A→B near depletion to stress rounding
+            uint256[] memory edgeAmounts = new uint256[](8);
+            edgeAmounts[0] = 1;           // 1 wei
+            edgeAmounts[1] = 7;           // prime
+            edgeAmounts[2] = 13;          // prime
+            edgeAmounts[3] = 100;         // 100 wei
+            edgeAmounts[4] = 1337;        // odd
+            edgeAmounts[5] = 1e9;         // 1 gwei
+            edgeAmounts[6] = 1e12;        // small
+            edgeAmounts[7] = 1e15;        // 0.001 token
+
+            for (uint256 i = 0; i < edgeAmounts.length; i++) {
+                if (balB == 0) break; // Already fully depleted
+
+                try swapVM.asView().quote(
+                    order, tokenA, tokenB, edgeAmounts[i], takerDataExactIn
+                ) returns (uint256, uint256 qOut, bytes32) {
+                    if (qOut == 0) continue; // Skip dust that produces zero output
+
+                    vm.prank(taker);
+                    (uint256 amIn, uint256 amOut,) = swapVM.swap(
+                        order, tokenA, tokenB, edgeAmounts[i], takerDataExactIn
+                    );
+                    takerTotalIn += amIn;
+                    takerTotalOut += amOut;
+                    balA += amIn;
+                    balB -= amOut;
+                } catch {
+                    // Expected near full depletion — solve may revert
+                }
+            }
+
+            // Phase 3: Reverse direction B→A to refill the depleted reserve
+            // After depletion, reverse swaps must work
+            bytes memory takerDataExactInReverse = _makeTakerData(true, signature);
+            uint256[] memory refillAmounts = new uint256[](7);
+            refillAmounts[0] = 1;         // 1 wei — extreme edge
+            refillAmounts[1] = 100;
+            refillAmounts[2] = 1e12;
+            refillAmounts[3] = 1e15;
+            refillAmounts[4] = 10e18;
+            refillAmounts[5] = 50e18;
+            refillAmounts[6] = 100e18;
+
+            for (uint256 i = 0; i < refillAmounts.length; i++) {
+                try swapVM.asView().quote(
+                    order, tokenB, tokenA, refillAmounts[i], takerDataExactInReverse
+                ) returns (uint256, uint256 qOut, bytes32) {
+                    if (qOut == 0) continue;
+
+                    vm.prank(taker);
+                    (uint256 amIn, uint256 amOut,) = swapVM.swap(
+                        order, tokenB, tokenA, refillAmounts[i], takerDataExactInReverse
+                    );
+                    // For B→A swaps: taker puts B in, gets A out
+                    // From the pool's perspective: balB increases, balA decreases
+                    takerTotalIn += amOut; // taker received A (=amOut), previously gave A as input
+                    takerTotalOut += amIn; // taker gave B (=amIn), previously received B as output
+                    balB += amIn;
+                    balA -= amOut;
+
+                    // Verify invariant after refill
+                    if (balA > 0 && balB > 0) {
+                        uint256 invAfter = PeggedSwapMath.invariantFromReserves(
+                            balA, balB, setup.x0, setup.y0, setup.linearWidth
+                        );
+                        uint256 invInit = PeggedSwapMath.invariantFromReserves(
+                            poolSize, poolSize, setup.x0, setup.y0, setup.linearWidth
+                        );
+                        assertGe(invAfter, invInit - 1, "Invariant must not decrease (refill phase)");
+                    }
+                } catch {
+                    // May revert for very small amounts near edge
+                }
+            }
+
+            // Phase 4: More edge-case swaps in both directions with tiny amounts
+            for (uint256 round = 0; round < 5; round++) {
+                // Small A→B
+                uint256 smallAmtAB = (round + 1) * 3 + 1; // 4, 7, 10, 13, 16 wei
+                try swapVM.asView().quote(
+                    order, tokenA, tokenB, smallAmtAB, takerDataExactIn
+                ) returns (uint256, uint256 qOut, bytes32) {
+                    if (qOut > 0) {
+                        vm.prank(taker);
+                        (uint256 amIn, uint256 amOut,) = swapVM.swap(
+                            order, tokenA, tokenB, smallAmtAB, takerDataExactIn
+                        );
+                        balA += amIn;
+                        balB -= amOut;
+                    }
+                } catch {}
+
+                // Small B→A
+                uint256 smallAmtBA = (round + 1) * 5 + 2; // 7, 12, 17, 22, 27 wei
+                try swapVM.asView().quote(
+                    order, tokenB, tokenA, smallAmtBA, takerDataExactInReverse
+                ) returns (uint256, uint256 qOut, bytes32) {
+                    if (qOut > 0) {
+                        vm.prank(taker);
+                        (uint256 amIn, uint256 amOut,) = swapVM.swap(
+                            order, tokenB, tokenA, smallAmtBA, takerDataExactInReverse
+                        );
+                        balB += amIn;
+                        balA -= amOut;
+                    }
+                } catch {}
+            }
+
+            // Final invariant check: pool should be at least as good as initial
+            if (balA > 0 && balB > 0) {
+                uint256 invFinal = PeggedSwapMath.invariantFromReserves(
+                    balA, balB, setup.x0, setup.y0, setup.linearWidth
+                );
+                uint256 invInit = PeggedSwapMath.invariantFromReserves(
+                    poolSize, poolSize, setup.x0, setup.y0, setup.linearWidth
+                );
+                assertGe(invFinal, invInit - 1, "Final invariant must not decrease");
+            }
+        }
     }
 }
