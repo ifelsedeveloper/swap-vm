@@ -36,11 +36,25 @@
 
 \title{\textbf{Strict-Additive Fees Reinvested Inside Pricing for AMMs}\\
 \large Conservative and Dissipative Constructions with ExactIn/ExactOut}
-\author{Vadim Fadeev \and Sergey Prilutskiy}
+\author{
+  \begin{tabular}{@{}c@{\hspace{2em}}c@{}}
+    Vadim Fadeev & Sergey Prilutskiy \\
+    \texttt{xboxfadeev@gmail.com} & \texttt{prilutski@gmail.com} \\[1em]
+    Vijay Singh & Sergej Kunz \\
+    \texttt{vijaykumar.singh@openzeppelin.com} & \texttt{info@deacix.de}
+  \end{tabular}
+}
 \date{\today}
 
 \begin{document}
 \maketitle
+
+\paragraph{Acknowledgements.}
+The authors thank
+Nikita Galikhanov (n.galikhanov@1inch.io),
+Gleb Alekseev (g.alekseev@1inch.io),
+and Vasiliy Tikhonenko (v.tikhonenko@1inch.io)
+for valuable discussions and feedback.
 
 \begin{abstract}
 Constant-product AMMs ($xy=k$) are strictly additive (split-invariant): executing a trade of size $a+b$ yields the same final pool state as executing $a$ and then $b$.
