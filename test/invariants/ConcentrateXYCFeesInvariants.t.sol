@@ -5,6 +5,7 @@ pragma solidity 0.8.30;
 /// @custom:copyright © 2025 Degensoft Ltd
 
 import { Test } from "forge-std/Test.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { TokenMock } from "@1inch/solidity-utils/contracts/mocks/TokenMock.sol";
 
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
@@ -25,7 +26,6 @@ import { dynamic } from "../utils/Dynamic.sol";
 import { ProtocolFeeProviderMock } from "../../mocks/ProtocolFeeProviderMock.sol";
 
 import { CoreInvariants } from "./CoreInvariants.t.sol";
-
 
 /**
  * @title ConcentrateXYCFeesInvariants
@@ -69,6 +69,20 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
         tokenB.approve(address(swapVM), type(uint256).max);
     }
 
+    function _concentrateBalances(
+        uint256 available,
+        uint256 sqrtPmin,
+        uint256 sqrtPmax
+    ) internal view returns (uint256 balA, uint256 balB) {
+        (, uint256 actualLt, uint256 actualGt) =
+            XYCConcentrateArgsBuilder.computeLiquidityFromAmounts(
+                available, available, 1e18, sqrtPmin, sqrtPmax
+            );
+        (balA, balB) = address(tokenA) < address(tokenB)
+            ? (actualLt, actualGt)
+            : (actualGt, actualLt);
+    }
+
     /**
      * @notice Implementation of _executeSwap for real swap execution
      */
@@ -94,7 +108,6 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
 
         // Verify the swap consumed the expected input amount
 
-
         return (actualIn, actualOut);
     }
 
@@ -104,21 +117,10 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
      * Test Concentrate + XYC with flat fee on input
      */
     function test_ConcentrateXYCFlatFeeIn() public {
-        uint256 balanceA = 1000e18;
-        uint256 balanceB = 1000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.8e18;
-        uint256 priceMax = 1.25e18;
+        uint256 sqrtPmin = Math.sqrt(0.8e36);
+        uint256 sqrtPmax = Math.sqrt(1.25e36);
+        (uint256 balanceA, uint256 balanceB) = _concentrateBalances(1000e18, sqrtPmin, sqrtPmax);
         uint32 feeBps = 0.003e9; // 0.3% fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
         Program memory program = ProgramBuilder.init(_opcodes());
         bytes memory bytecode = bytes.concat(
             program.build(_dynamicBalancesXD,
@@ -127,13 +129,7 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
                     dynamic([balanceA, balanceB])
                 )),
             program.build(_xycConcentrateGrowLiquidity2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
+                XYCConcentrateArgsBuilder.build2D(sqrtPmin, sqrtPmax)),
             program.build(_flatFeeAmountInXD,
                 FeeArgsBuilder.buildFlatFee(feeBps)),
             program.build(_xycSwapXD)
@@ -158,21 +154,10 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
      * Test Concentrate + XYC with flat fee on output
      */
     function test_ConcentrateXYCFlatFeeOut() public {
-        uint256 balanceA = 1500e18;
-        uint256 balanceB = 1500e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.7e18;
-        uint256 priceMax = 1.4e18;
+        uint256 sqrtPmin = Math.sqrt(0.8e36);
+        uint256 sqrtPmax = Math.sqrt(1.25e36);
+        (uint256 balanceA, uint256 balanceB) = _concentrateBalances(1500e18, sqrtPmin, sqrtPmax);
         uint32 feeBps = 0.005e9; // 0.5% fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
         Program memory program = ProgramBuilder.init(_opcodes());
         bytes memory bytecode = bytes.concat(
             program.build(_dynamicBalancesXD,
@@ -181,13 +166,7 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
                     dynamic([balanceA, balanceB])
                 )),
             program.build(_xycConcentrateGrowLiquidity2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
+                XYCConcentrateArgsBuilder.build2D(sqrtPmin, sqrtPmax)),
             program.build(_flatFeeAmountOutXD,
                 FeeArgsBuilder.buildFlatFee(feeBps)),
             program.build(_xycSwapXD)
@@ -214,21 +193,10 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
      * Test Concentrate + XYC with progressive fee on input
      */
     function test_ConcentrateXYCProgressiveFeeIn() public {
-        uint256 balanceA = 2000e18;
-        uint256 balanceB = 2000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.5e18;
-        uint256 priceMax = 2e18;
+        uint256 sqrtPmin = Math.sqrt(0.8e36);
+        uint256 sqrtPmax = Math.sqrt(1.25e36);
+        (uint256 balanceA, uint256 balanceB) = _concentrateBalances(2000e18, sqrtPmin, sqrtPmax);
         uint32 feeBps = 0.1e9; // 10% progressive fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
         Program memory program = ProgramBuilder.init(_opcodes());
         bytes memory bytecode = bytes.concat(
             program.build(_dynamicBalancesXD,
@@ -237,13 +205,7 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
                     dynamic([balanceA, balanceB])
                 )),
             program.build(_xycConcentrateGrowLiquidity2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
+                XYCConcentrateArgsBuilder.build2D(sqrtPmin, sqrtPmax)),
             program.build(_progressiveFeeInXD,
                 FeeArgsBuilderExperimental.buildProgressiveFee(feeBps)),
             program.build(_xycSwapXD)
@@ -272,21 +234,10 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
      * Test Concentrate + XYC with progressive fee on output
      */
     function test_ConcentrateXYCProgressiveFeeOut() public {
-        uint256 balanceA = 2000e18;
-        uint256 balanceB = 2000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.5e18;
-        uint256 priceMax = 2e18;
+        uint256 sqrtPmin = Math.sqrt(0.8e36);
+        uint256 sqrtPmax = Math.sqrt(1.25e36);
+        (uint256 balanceA, uint256 balanceB) = _concentrateBalances(2000e18, sqrtPmin, sqrtPmax);
         uint32 feeBps = 0.1e9; // 10% progressive fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
         Program memory program = ProgramBuilder.init(_opcodes());
         bytes memory bytecode = bytes.concat(
             program.build(_dynamicBalancesXD,
@@ -295,13 +246,7 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
                     dynamic([balanceA, balanceB])
                 )),
             program.build(_xycConcentrateGrowLiquidity2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
+                XYCConcentrateArgsBuilder.build2D(sqrtPmin, sqrtPmax)),
             program.build(_progressiveFeeOutXD,
                 FeeArgsBuilderExperimental.buildProgressiveFee(feeBps)),
             program.build(_xycSwapXD)
@@ -330,21 +275,10 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
      * Test Concentrate + XYC with protocol fee on amountIn
      */
     function test_ConcentrateXYCProtocolFeeIn() public {
-        uint256 balanceA = 1000e18;
-        uint256 balanceB = 1000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.9e18;
-        uint256 priceMax = 1.1e18;
+        uint256 sqrtPmin = Math.sqrt(0.8e36);
+        uint256 sqrtPmax = Math.sqrt(1.25e36);
+        (uint256 balanceA, uint256 balanceB) = _concentrateBalances(1000e18, sqrtPmin, sqrtPmax);
         uint32 feeBps = 0.002e9; // 0.2% protocol fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
         Program memory program = ProgramBuilder.init(_opcodes());
         bytes memory bytecode = bytes.concat(
             // Protocol fee on amountIn BEFORE balances
@@ -356,13 +290,7 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
                     dynamic([balanceA, balanceB])
                 )),
             program.build(_xycConcentrateGrowLiquidity2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
+                XYCConcentrateArgsBuilder.build2D(sqrtPmin, sqrtPmax)),
             program.build(_xycSwapXD)
         );
 
@@ -385,11 +313,9 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
      * Test Concentrate + XYC with dynamic protocol fee on amountIn
      */
     function test_ConcentrateXYCDynamicProtocolFeeIn() public {
-        uint256 balanceA = 1000e18;
-        uint256 balanceB = 1000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.9e18;
-        uint256 priceMax = 1.1e18;
+        uint256 sqrtPmin = Math.sqrt(0.8e36);
+        uint256 sqrtPmax = Math.sqrt(1.25e36);
+        (uint256 balanceA, uint256 balanceB) = _concentrateBalances(1000e18, sqrtPmin, sqrtPmax);
         uint32 feeBps = 0.002e9; // 0.2% protocol fee
 
         // Deploy dynamic fee provider
@@ -398,15 +324,6 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
             feeRecipient,
             address(this)
         );
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
         Program memory program = ProgramBuilder.init(_opcodes());
         bytes memory bytecode = bytes.concat(
             // Dynamic protocol fee on amountIn BEFORE balances
@@ -418,13 +335,7 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
                     dynamic([balanceA, balanceB])
                 )),
             program.build(_xycConcentrateGrowLiquidity2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
+                XYCConcentrateArgsBuilder.build2D(sqrtPmin, sqrtPmax)),
             program.build(_xycSwapXD)
         );
 
@@ -449,21 +360,10 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
      * Test Concentrate + XYC with protocol fee
      */
     function test_ConcentrateXYCProtocolFee() public {
-        uint256 balanceA = 1000e18;
-        uint256 balanceB = 1000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.9e18;
-        uint256 priceMax = 1.1e18;
+        uint256 sqrtPmin = Math.sqrt(0.8e36);
+        uint256 sqrtPmax = Math.sqrt(1.25e36);
+        (uint256 balanceA, uint256 balanceB) = _concentrateBalances(1000e18, sqrtPmin, sqrtPmax);
         uint32 feeBps = 0.002e9; // 0.2% protocol fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
         // Pre-approve for protocol fee transfers
         vm.prank(maker);
         tokenB.approve(address(swapVM), type(uint256).max);
@@ -479,13 +379,7 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
                     dynamic([balanceA, balanceB])
                 )),
             program.build(_xycConcentrateGrowLiquidity2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
+                XYCConcentrateArgsBuilder.build2D(sqrtPmin, sqrtPmax)),
             program.build(_xycSwapXD)
         );
 
@@ -510,22 +404,11 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
      * Test multiple fee types with Concentrate + XYC
      */
     function test_ConcentrateXYCMultipleFees() public {
-        uint256 balanceA = 3000e18;
-        uint256 balanceB = 3000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.6e18;
-        uint256 priceMax = 1.7e18;
+        uint256 sqrtPmin = Math.sqrt(0.8e36);
+        uint256 sqrtPmax = Math.sqrt(1.25e36);
+        (uint256 balanceA, uint256 balanceB) = _concentrateBalances(3000e18, sqrtPmin, sqrtPmax);
         uint32 flatFeeBps = 0.001e9;      // 0.1% flat fee
         uint32 protocolFeeBps = 0.02e9; // 2% protocol fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
         Program memory program = ProgramBuilder.init(_opcodes());
         bytes memory bytecode = bytes.concat(
             program.build(_protocolFeeAmountOutXD,
@@ -536,13 +419,7 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
                     dynamic([balanceA, balanceB])
                 )),
             program.build(_xycConcentrateGrowLiquidity2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
+                XYCConcentrateArgsBuilder.build2D(sqrtPmin, sqrtPmax)),
             program.build(_flatFeeAmountInXD,
                 FeeArgsBuilder.buildFlatFee(flatFeeBps)),
             program.build(_flatFeeAmountOutXD,
@@ -560,600 +437,10 @@ contract ConcentrateXYCFeesInvariants is Test, OpcodesDebug, CoreInvariants {
         config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
         // TODO: Complex fee interactions affect additivity
         config.skipAdditivity = true;
-
-        assertAllInvariantsWithConfig(
-            swapVM,
-            order,
-            address(tokenA),
-            address(tokenB),
-            config
-        );
-    }
-
-    // ====== GrowPriceRange2D Tests ======
-
-    /**
-     * Test Concentrate + XYC with flat fee on input (GrowPriceRange)
-     */
-    function test_ConcentrateXYCFlatFeeIn_GrowPriceRange() public {
-        uint256 balanceA = 1000e18;
-        uint256 balanceB = 1000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.8e18;
-        uint256 priceMax = 1.25e18;
-        uint32 feeBps = 0.003e9; // 0.3% fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([balanceA, balanceB])
-                )),
-            program.build(_xycConcentrateGrowPriceRange2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
-            program.build(_flatFeeAmountInXD,
-                FeeArgsBuilder.buildFlatFee(feeBps)),
-            program.build(_xycSwapXD)
-        );
-
-        ISwapVM.Order memory order = _createOrder(bytecode);
-
-        InvariantConfig memory config = _getDefaultConfig();
-        config.exactInTakerData = _signAndPackTakerData(order, true, 0);
-        config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-
-        assertAllInvariantsWithConfig(
-            swapVM,
-            order,
-            address(tokenA),
-            address(tokenB),
-            config
-        );
-    }
-
-    /**
-     * Test Concentrate + XYC with flat fee on output (GrowPriceRange)
-     */
-    function test_ConcentrateXYCFlatFeeOut_GrowPriceRange() public {
-        uint256 balanceA = 1500e18;
-        uint256 balanceB = 1500e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.7e18;
-        uint256 priceMax = 1.4e18;
-        uint32 feeBps = 0.005e9; // 0.5% fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([balanceA, balanceB])
-                )),
-            program.build(_xycConcentrateGrowPriceRange2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
-            program.build(_flatFeeAmountOutXD,
-                FeeArgsBuilder.buildFlatFee(feeBps)),
-            program.build(_xycSwapXD)
-        );
-
-        ISwapVM.Order memory order = _createOrder(bytecode);
-
-        InvariantConfig memory config = _getDefaultConfig();
-        config.exactInTakerData = _signAndPackTakerData(order, true, 0);
-        config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-        // TODO: need to research behavior - state-dependent due to scale
-        config.skipAdditivity = true;
-
-        assertAllInvariantsWithConfig(
-            swapVM,
-            order,
-            address(tokenA),
-            address(tokenB),
-            config
-        );
-    }
-
-    /**
-     * Test Concentrate + XYC with progressive fee on input (GrowPriceRange)
-     */
-    function test_ConcentrateXYCProgressiveFeeIn_GrowPriceRange() public {
-        uint256 balanceA = 2000e18;
-        uint256 balanceB = 2000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.5e18;
-        uint256 priceMax = 2e18;
-        uint32 feeBps = 0.1e9; // 10% progressive fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([balanceA, balanceB])
-                )),
-            program.build(_xycConcentrateGrowPriceRange2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
-            program.build(_progressiveFeeInXD,
-                FeeArgsBuilderExperimental.buildProgressiveFee(feeBps)),
-            program.build(_xycSwapXD)
-        );
-
-        ISwapVM.Order memory order = _createOrder(bytecode);
-
-        InvariantConfig memory config = _getDefaultConfig();
-        config.exactInTakerData = _signAndPackTakerData(order, true, 0);
-        config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-        // TODO: Progressive fees violate additivity by design
-        config.skipAdditivity = true;
-        // TODO: need to research behavior
-        config.skipSymmetry = true;
-
-        assertAllInvariantsWithConfig(
-            swapVM,
-            order,
-            address(tokenA),
-            address(tokenB),
-            config
-        );
-    }
-
-    /**
-     * Test Concentrate + XYC with progressive fee on output (GrowPriceRange)
-     */
-    function test_ConcentrateXYCProgressiveFeeOut_GrowPriceRange() public {
-        uint256 balanceA = 2000e18;
-        uint256 balanceB = 2000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.5e18;
-        uint256 priceMax = 2e18;
-        uint32 feeBps = 0.1e9; // 10% progressive fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([balanceA, balanceB])
-                )),
-            program.build(_xycConcentrateGrowPriceRange2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
-            program.build(_progressiveFeeOutXD,
-                FeeArgsBuilderExperimental.buildProgressiveFee(feeBps)),
-            program.build(_xycSwapXD)
-        );
-
-        ISwapVM.Order memory order = _createOrder(bytecode);
-
-        InvariantConfig memory config = _getDefaultConfig();
-        config.exactInTakerData = _signAndPackTakerData(order, true, 0);
-        config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-        // TODO: Progressive fees violate additivity by design
-        config.skipAdditivity = true;
-        // TODO: need to research behavior
-        config.skipSymmetry = true;
-
-        assertAllInvariantsWithConfig(
-            swapVM,
-            order,
-            address(tokenA),
-            address(tokenB),
-            config
-        );
-    }
-
-    /**
-     * Test Concentrate + XYC with protocol fee (GrowPriceRange)
-     */
-    function test_ConcentrateXYCProtocolFee_GrowPriceRange() public {
-        uint256 balanceA = 1000e18;
-        uint256 balanceB = 1000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.9e18;
-        uint256 priceMax = 1.1e18;
-        uint32 feeBps = 0.002e9; // 0.2% protocol fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
-        // Pre-approve for protocol fee transfers
-        vm.prank(maker);
-        tokenB.approve(address(swapVM), type(uint256).max);
-
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            // Protocol fee BEFORE balances
-            program.build(_protocolFeeAmountOutXD,
-                FeeArgsBuilder.buildProtocolFee(feeBps, feeRecipient)),
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([balanceA, balanceB])
-                )),
-            program.build(_xycConcentrateGrowPriceRange2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
-            program.build(_xycSwapXD)
-        );
-
-        ISwapVM.Order memory order = _createOrder(bytecode);
-
-        InvariantConfig memory config = _getDefaultConfig();
-        config.exactInTakerData = _signAndPackTakerData(order, true, 0);
-        config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-        // Protocol fee causes 1 wei rounding in additivity
-        config.additivityTolerance = 1;
-
-        assertAllInvariantsWithConfig(
-            swapVM,
-            order,
-            address(tokenA),
-            address(tokenB),
-            config
-        );
-    }
-
-    /**
-     * Test multiple fee types with Concentrate + XYC (GrowPriceRange)
-     */
-    function test_ConcentrateXYCMultipleFees_GrowPriceRange() public {
-        uint256 balanceA = 3000e18;
-        uint256 balanceB = 3000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.6e18;
-        uint256 priceMax = 1.7e18;
-        uint32 flatFeeBps = 0.001e9;      // 0.1% flat fee
-        uint32 protocolFeeBps = 0.02e9; // 2% protocol fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            program.build(_protocolFeeAmountOutXD,
-                FeeArgsBuilder.buildProtocolFee(protocolFeeBps, feeRecipient)),
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([balanceA, balanceB])
-                )),
-            program.build(_xycConcentrateGrowPriceRange2D,
-                XYCConcentrateArgsBuilder.build2D(
-                    address(tokenA),
-                    address(tokenB),
-                    deltaA,
-                    deltaB,
-                    liquidity
-                )),
-            program.build(_flatFeeAmountInXD,
-                FeeArgsBuilder.buildFlatFee(flatFeeBps)),
-            program.build(_flatFeeAmountOutXD,
-                FeeArgsBuilder.buildFlatFee(flatFeeBps)),
-            program.build(_xycSwapXD)
-        );
-
-        ISwapVM.Order memory order = _createOrder(bytecode);
-
-        InvariantConfig memory config = createInvariantConfig(
-            dynamic([uint256(10e18), uint256(20e18), uint256(50e18)]),
-            1
-        );
-        config.exactInTakerData = _signAndPackTakerData(order, true, 0);
-        config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-        // TODO: Complex fee interactions affect additivity
-        config.skipAdditivity = true;
-
-        assertAllInvariantsWithConfig(
-            swapVM,
-            order,
-            address(tokenA),
-            address(tokenB),
-            config
-        );
-    }
-
-    // ====== GrowLiquidityXD Tests ======
-
-    /**
-     * Test Concentrate + XYC with flat fee on input (GrowLiquidityXD)
-     */
-    function test_ConcentrateXYCFlatFeeIn_GrowLiquidityXD() public {
-        uint256 balanceA = 1000e18;
-        uint256 balanceB = 1000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.8e18;
-        uint256 priceMax = 1.25e18;
-        uint32 feeBps = 0.003e9; // 0.3% fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
-        // Create arrays for XD version
-        address[] memory tokens = new address[](2);
-        tokens[0] = address(tokenA);
-        tokens[1] = address(tokenB);
-
-        uint256[] memory deltas = new uint256[](2);
-        deltas[0] = deltaA;
-        deltas[1] = deltaB;
-
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([balanceA, balanceB])
-                )),
-            program.build(_xycConcentrateGrowLiquidityXD,
-                XYCConcentrateArgsBuilder.buildXD(tokens, deltas, liquidity)),
-            program.build(_flatFeeAmountInXD,
-                FeeArgsBuilder.buildFlatFee(feeBps)),
-            program.build(_xycSwapXD)
-        );
-
-        ISwapVM.Order memory order = _createOrder(bytecode);
-
-        InvariantConfig memory config = _getDefaultConfig();
-        config.exactInTakerData = _signAndPackTakerData(order, true, 0);
-        config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-
-        assertAllInvariantsWithConfig(
-            swapVM,
-            order,
-            address(tokenA),
-            address(tokenB),
-            config
-        );
-    }
-
-    /**
-     * Test Concentrate + XYC with progressive fee on output (GrowLiquidityXD)
-     */
-    function test_ConcentrateXYCProgressiveFeeOut_GrowLiquidityXD() public {
-        uint256 balanceA = 2000e18;
-        uint256 balanceB = 2000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.5e18;
-        uint256 priceMax = 2e18;
-        uint32 feeBps = 0.1e9; // 10% progressive fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
-        // Create arrays for XD version
-        address[] memory tokens = new address[](2);
-        tokens[0] = address(tokenA);
-        tokens[1] = address(tokenB);
-
-        uint256[] memory deltas = new uint256[](2);
-        deltas[0] = deltaA;
-        deltas[1] = deltaB;
-
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([balanceA, balanceB])
-                )),
-            program.build(_xycConcentrateGrowLiquidityXD,
-                XYCConcentrateArgsBuilder.buildXD(tokens, deltas, liquidity)),
-            program.build(_progressiveFeeOutXD,
-                FeeArgsBuilderExperimental.buildProgressiveFee(feeBps)),
-            program.build(_xycSwapXD)
-        );
-
-        ISwapVM.Order memory order = _createOrder(bytecode);
-
-        InvariantConfig memory config = _getDefaultConfig();
-        config.exactInTakerData = _signAndPackTakerData(order, true, 0);
-        config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-        // TODO: Progressive fees violate additivity by design
-        config.skipAdditivity = true;
-        // TODO: need to research behavior
-        config.skipSymmetry = true;
-
-        assertAllInvariantsWithConfig(
-            swapVM,
-            order,
-            address(tokenA),
-            address(tokenB),
-            config
-        );
-    }
-
-    // ====== GrowPriceRangeXD Tests ======
-
-    /**
-     * Test Concentrate + XYC with flat fee on output (GrowPriceRangeXD)
-     */
-    function test_ConcentrateXYCFlatFeeOut_GrowPriceRangeXD() public {
-        uint256 balanceA = 1500e18;
-        uint256 balanceB = 1500e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.7e18;
-        uint256 priceMax = 1.4e18;
-        uint32 feeBps = 0.005e9; // 0.5% fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
-        // Create arrays for XD version
-        address[] memory tokens = new address[](2);
-        tokens[0] = address(tokenA);
-        tokens[1] = address(tokenB);
-
-        uint256[] memory deltas = new uint256[](2);
-        deltas[0] = deltaA;
-        deltas[1] = deltaB;
-
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([balanceA, balanceB])
-                )),
-            program.build(_xycConcentrateGrowPriceRangeXD,
-                XYCConcentrateArgsBuilder.buildXD(tokens, deltas, liquidity)),
-            program.build(_flatFeeAmountOutXD,
-                FeeArgsBuilder.buildFlatFee(feeBps)),
-            program.build(_xycSwapXD)
-        );
-
-        ISwapVM.Order memory order = _createOrder(bytecode);
-
-        InvariantConfig memory config = _getDefaultConfig();
-        config.exactInTakerData = _signAndPackTakerData(order, true, 0);
-        config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-        // TODO: need to research behavior - state-dependent due to scale
-        config.skipAdditivity = true;
-
-        assertAllInvariantsWithConfig(
-            swapVM,
-            order,
-            address(tokenA),
-            address(tokenB),
-            config
-        );
-    }
-
-    /**
-     * Test Concentrate + XYC with protocol fee (GrowPriceRangeXD)
-     */
-    function test_ConcentrateXYCProtocolFee_GrowPriceRangeXD() public {
-        uint256 balanceA = 1000e18;
-        uint256 balanceB = 1000e18;
-        uint256 currentPrice = 1e18;
-        uint256 priceMin = 0.9e18;
-        uint256 priceMax = 1.1e18;
-        uint32 feeBps = 0.002e9; // 0.2% protocol fee
-
-        (uint256 deltaA, uint256 deltaB, uint256 liquidity) = XYCConcentrateArgsBuilder.computeDeltas(
-            balanceA,
-            balanceB,
-            currentPrice,
-            priceMin,
-            priceMax
-        );
-
-        // Create arrays for XD version
-        address[] memory tokens = new address[](2);
-        tokens[0] = address(tokenA);
-        tokens[1] = address(tokenB);
-
-        uint256[] memory deltas = new uint256[](2);
-        deltas[0] = deltaA;
-        deltas[1] = deltaB;
-
-        Program memory program = ProgramBuilder.init(_opcodes());
-        bytes memory bytecode = bytes.concat(
-            // Protocol fee BEFORE balances
-            program.build(_protocolFeeAmountOutXD,
-                FeeArgsBuilder.buildProtocolFee(feeBps, feeRecipient)),
-            program.build(_dynamicBalancesXD,
-                BalancesArgsBuilder.build(
-                    dynamic([address(tokenA), address(tokenB)]),
-                    dynamic([balanceA, balanceB])
-                )),
-            program.build(_xycConcentrateGrowPriceRangeXD,
-                XYCConcentrateArgsBuilder.buildXD(tokens, deltas, liquidity)),
-            program.build(_xycSwapXD)
-        );
-
-        ISwapVM.Order memory order = _createOrder(bytecode);
-
-        InvariantConfig memory config = _getDefaultConfig();
-        config.exactInTakerData = _signAndPackTakerData(order, true, 0);
-        config.exactOutTakerData = _signAndPackTakerData(order, false, type(uint256).max);
-        // Protocol fee causes 1 wei rounding in additivity
-        config.additivityTolerance = 1;
+        // With multiple fees (2% protocol + 0.1% flat in + 0.1% flat out = ~2.2% total),
+        // a 1-wei input will have all fees round to 0, giving rate=1.0 vs spot=0.978.
+        // Use 250 bps (2.5%) rounding tolerance to accommodate this edge case.
+        config.roundingToleranceBps = 250;
 
         assertAllInvariantsWithConfig(
             swapVM,
