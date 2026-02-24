@@ -99,8 +99,8 @@ library XYCConcentrateArgsBuilder {
     ) internal pure returns (uint256) {
         uint256 alpha = ONE - Math.mulDiv(sqrtPriceMin, ONE, sqrtPriceMax);
         uint256 beta  = Math.mulDiv(bLt, sqrtPriceMin, ONE) + Math.mulDiv(bGt, ONE, sqrtPriceMax);
-        uint256 fourAC = Math.mulDiv(Math.mulDiv(4 * alpha, bLt, ONE), bGt, 1);
-        uint256 disc   = Math.mulDiv(beta, beta, 1) + fourAC;
+        uint256 fourAC = Math.mulDiv(4 * alpha, bLt, ONE) * bGt;
+        uint256 disc   = beta * beta + fourAC;
         return Math.mulDiv(beta + Math.sqrt(disc), ONE, 2 * alpha);
     }
 }
