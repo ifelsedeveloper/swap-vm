@@ -323,10 +323,38 @@ Splitting swaps must not provide better rates:
 - Larger trades cannot be improved by breaking into smaller ones
 
 ### 3. Quote/Swap Consistency
-Quote and swap functions must return identical amounts:
-- `quote()` is a view function that previews swap results
-- `swap()` execution must match the quoted amounts exactly
-- Essential for MEV protection and predictable execution
+
+**Numerical Consistency Guarantee:**
+- `quote()` and `swap()` return identical `(amountIn, amountOut)` **if both succeed**
+- This ensures predictable execution and prevents quote-execution arbitrage
+- Essential for MEV protection and reliable off-chain quoting
+
+**Execution Divergence via `isStaticContext`:**
+
+SwapVM uses `ctx.vm.isStaticContext` to enable gas-free quote previews by conditionally skipping side effects:
+
+| Instruction Category | Quote Mode (`isStaticContext=true`) | Swap Mode (`isStaticContext=false`) |
+|---------------------|-----------------------------------|-----------------------------------|
+| **Protocol Fees** | Computes fee, skips token transfer | Computes fee, executes token transfer |
+| **Invalidators** | Checks limits, skips state update | Checks limits, updates state (prevents replay) |
+| **Dynamic Balances** | Reads balances, skips storage write | Reads balances, updates storage |
+| **Decay/TWAP** | Uses current state, skips time update | Uses current state, updates timestamp |
+
+**Legitimate Divergence Cases:**
+1. ✅ **Quote succeeds, swap reverts** - Missing balance/approval for protocol fee transfer
+2. ✅ **Quote succeeds, swap reverts** - Order already executed (invalidator state changed between calls)
+3. ✅ **Quote succeeds, swap reverts** - Insufficient remaining balance (partial fill exhausted)
+
+These cases preserve **numerical consistency** (amounts match when both succeed) while allowing execution to fail due to external conditions.
+
+**Problematic Patterns (Maker Responsibility):**
+- ❌ **Backward jumps to stateful instructions** - Can break numerical consistency (quote and swap compute different amounts)
+- ❌ **Control flow depending on same-execution state changes** - Violates the invariant
+
+**Best Practices:**
+- **Makers:** Avoid backward jumps to `isStaticContext`-dependent instructions; test strategies with both `quote()` and `swap()`
+- **Takers:** Always use threshold protection in TakerTraits; handle swap revert scenarios even after successful quote
+- **Integrations:** Never rely on quote success as guarantee of swap success; use on-chain `quote()` for accurate amounts
 
 ### 4. Price Monotonicity
 Larger trades receive equal or worse prices:
