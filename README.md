@@ -1458,6 +1458,41 @@ bytes memory program = bytes.concat(
 
 **Note:** Debug instructions are no-ops in production routers and should only be used for development and testing.
 
+### Program Size Limitations
+
+SwapVM programs have an effective size limit of **65,535 bytes** (64KB) due to control flow instruction addressing.
+
+**Technical Details:**
+- The VM itself (`ContextLib.runLoop`) uses `uint256` for the program counter and can execute programs of any size
+- Control flow instructions (`_jump`, `_jumpIfTokenIn`, `_jumpIfTokenOut`) use `uint16` (2-byte) encoding for jump targets
+- Jump targets are limited to positions 0-65,535 within the bytecode
+- Programs larger than 65KB can execute, but jump instructions cannot address positions >= 65,536
+
+**Practical Impact:**
+- This limitation is **not restrictive** in practice
+- Typical strategies are 100-1,000 bytes
+- Even complex multi-instruction programs rarely exceed 5KB
+- 65KB ≈ 1,000-30,000 instructions (depending on argument sizes)
+
+**Workarounds for Large Programs:**
+If you need custom control flow beyond byte 65,535:
+```solidity
+// Use Extruction with arbitrary uint256 nextPC
+p.build(Extruction._extruction, 
+    ExtructionArgsBuilder.build(customControlContract, args))
+```
+
+The `Extruction` instruction can set arbitrary `uint256` program counter values, enabling custom control flow logic for edge cases requiring programs larger than 64KB.
+
+**Example Program Sizes:**
+| Strategy Type | Typical Size |
+|--------------|-------------|
+| Simple limit order | ~50 bytes |
+| Dutch auction + fees | ~100 bytes |
+| AMM with MEV protection | ~200 bytes |
+| Complex multi-conditional | ~500 bytes |
+| Maximum practical | ~5,000 bytes |
+
 ### Gas Optimization
 
 **Architecture Benefits:**
