@@ -11,7 +11,6 @@ import { IAqua } from "@1inch/aqua/src/interfaces/IAqua.sol";
 
 import { TransientLock, TransientLockLib } from "@1inch/solidity-utils/contracts/libraries/TransientLock.sol";
 import { CalldataPtrLib } from "@1inch/solidity-utils/contracts/libraries/CalldataPtr.sol";
-import { Calldata } from "@1inch/solidity-utils/contracts/libraries/Calldata.sol";
 import { OnlyWethReceiver } from "@1inch/solidity-utils/contracts/mixins/OnlyWethReceiver.sol";
 
 import { ISwapVM } from "./interfaces/ISwapVM.sol";
@@ -25,7 +24,6 @@ abstract contract SwapVM is EIP712, OnlyWethReceiver {
     using ECDSA for address;
     using SafeERC20 for IERC20;
     using SafeERC20 for IWETH;
-    using Calldata for bytes;
     using TransientLockLib for TransientLock;
     using ContextLib for Context;
     using MakerTraitsLib for MakerTraits;

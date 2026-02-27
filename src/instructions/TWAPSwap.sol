@@ -5,7 +5,6 @@ pragma solidity 0.8.30;
 /// @custom:copyright © 2025 Degensoft Ltd
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { Power } from "../libs/Power.sol";
 import { Context, ContextLib } from "../libs/VM.sol";
@@ -86,7 +85,6 @@ library TWAPSwapArgsBuilder {
 contract TWAPSwap is LimitSwap {
     using Math for uint256;
     using Power for uint256;
-    using SafeCast for uint256;
     using ContextLib for Context;
 
     error TWAPSwapMinTradeAmountNotReached(uint256 amountIn, uint256 minAmount);
