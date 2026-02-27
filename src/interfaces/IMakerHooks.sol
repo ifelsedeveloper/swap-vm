@@ -2,6 +2,10 @@
 
 pragma solidity ^0.8.0;
 
+/// @custom:license-url https://github.com/1inch/swap-vm/blob/main/LICENSES/SwapVM-1.1.txt
+/// @custom:copyright © 2025 Degensoft Ltd
+
+/// @custom:security-contact security@1inch.io
 interface IMakerHooks {
     /// @dev Called before tokenIn is transferred from taker to maker
     function preTransferIn(

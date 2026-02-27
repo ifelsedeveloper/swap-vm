@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 
 import { MakerTraits } from "../libs/MakerTraits.sol";
 
+/// @custom:security-contact security@1inch.io
 interface ISwapVM {
     struct Order {
         address maker;
