@@ -8,6 +8,7 @@ import { MakerTraits } from "../libs/MakerTraits.sol";
 
 /// @title ISwapVM
 /// @notice Core interface for SwapVM - executes programmable token swap strategies
+/// @custom:security-contact security@1inch.io
 interface ISwapVM {
     /// @notice Order structure containing maker's swap strategy
     /// @param maker Address of the liquidity provider
