@@ -7,7 +7,6 @@ pragma solidity 0.8.30;
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { Calldata } from "@1inch/solidity-utils/contracts/libraries/Calldata.sol";
-import { TakerTraits, TakerTraitsLib } from "./TakerTraits.sol";
 import { IMakerHooks } from "../interfaces/IMakerHooks.sol";
 import { ISwapVM } from "../interfaces/ISwapVM.sol";
 
@@ -16,7 +15,6 @@ type MakerTraits is uint256;
 library MakerTraitsLib {
     using SafeCast for uint256;
     using Calldata for bytes;
-    using TakerTraitsLib for TakerTraits;
     using MakerTraitsLib for MakerTraits;
 
     error MakerTraitsMissingHookData();
@@ -41,7 +39,6 @@ library MakerTraitsLib {
     uint256 constant internal POST_TRANSFER_OUT_HOOK_HAS_TARGET = 1 << 245;
 
     uint256 constant internal ORDER_DATA_SLICES_INDEXES_BIT_OFFSET = 160;
-    uint256 constant internal ORDER_DATA_SLICES_INDEXES_BIT_MASK = type(uint64).max;
     uint256 constant internal ORDER_DATA_SLICES_INDEX_BIT_MASK = type(uint16).max;
     uint256 constant internal ORDER_DATA_SLICES_INDEX_BIT_SIZE_SHL = 4;
 

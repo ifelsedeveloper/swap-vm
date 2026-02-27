@@ -9,8 +9,6 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@1inch/solidity-utils/contracts/libraries/SafeERC20.sol";
 import { IAqua } from "@1inch/aqua/src/interfaces/IAqua.sol";
 
-import { IProtocolFeeProvider } from "./interfaces/IProtocolFeeProvider.sol";
-
 import { Calldata } from "@1inch/solidity-utils/contracts/libraries/Calldata.sol";
 import { Context, ContextLib } from "../libs/VM.sol";
 

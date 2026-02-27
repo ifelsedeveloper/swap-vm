@@ -7,14 +7,12 @@ pragma solidity 0.8.30;
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { Calldata } from "@1inch/solidity-utils/contracts/libraries/Calldata.sol";
-import { CalldataPtr, CalldataPtrLib } from "@1inch/solidity-utils/contracts/libraries/CalldataPtr.sol";
 
 type TakerTraits is uint256;
 
 library TakerTraitsLib {
     using SafeCast for uint256;
     using Calldata for bytes;
-    using CalldataPtrLib for CalldataPtr;
     using TakerTraitsLib for TakerTraits;
 
     error TakerTraitsMissingTraits();
