@@ -171,7 +171,7 @@ contract Fee {
 
             uint256 feeAmountIn = _feeAmountIn(ctx, feeBps);
 
-            if (!ctx.vm.isStaticContext) {
+            if (!ctx.vm.isStaticContext && feeAmountIn > 0) {
                 IERC20(ctx.query.tokenIn).safeTransferFrom(ctx.query.maker, to, feeAmountIn);
             }
         }
@@ -221,7 +221,7 @@ contract Fee {
             uint256 feeAmountIn = _feeAmountIn(ctx, feeBps);
             ctx.swap.amountNetPulled += feeAmountIn;
 
-            if (!ctx.vm.isStaticContext) {
+            if (!ctx.vm.isStaticContext && feeAmountIn > 0) {
                 _AQUA.pull(ctx.query.maker, ctx.query.orderHash, ctx.query.tokenIn, feeAmountIn, to);
             }
         }
