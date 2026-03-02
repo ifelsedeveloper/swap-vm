@@ -1065,6 +1065,39 @@ if (useAquaInsteadOfSignature) {
 | **Custom Logic** | Hooks for validation | Pre/post transfer hooks |
 | **Receiver Control** | Specify token recipient | `receiver` in MakerTraits |
 
+> **⚠️ HOOK EXECUTION ORDER WARNING FOR MAKERS**
+>
+> **Taker Controls Transfer Order:** The taker specifies `isFirstTransferFromTaker` flag, which determines whether the taker transfers input tokens first or receives output tokens first. This means the actual execution order of your hooks depends on the taker's choice.
+>
+> **Complete Execution Sequence:**
+> - `isFirstTransferFromTaker = true`:
+>   1. `preTransferInHook` (maker)
+>   2. `preTransferInCallback` (taker)
+>   3. Input token transfer
+>   4. `postTransferInHook` (maker)
+>   5. `preTransferOutHook` (maker)
+>   6. `preTransferOutCallback` (taker)
+>   7. Output token transfer
+>   8. `postTransferOutHook` (maker)
+>
+> - `isFirstTransferFromTaker = false`:
+>   1. `preTransferOutHook` (maker)
+>   2. `preTransferOutCallback` (taker)
+>   3. Output token transfer
+>   4. `postTransferOutHook` (maker)
+>   5. `preTransferInHook` (maker)
+>   6. `preTransferInCallback` (taker)
+>   7. Input token transfer
+>   8. `postTransferInHook` (maker)
+>
+> **Maker Responsibility:** When implementing hooks, you must account for both possible execution orders. Do not assume a fixed sequence (e.g., assuming `preTransferInHook` always executes before `preTransferOutHook`). Note that taker callbacks are executed between your hooks - this is controlled by the taker and outside your control.
+>
+> **Best Practices:**
+> - Design hooks to be order-independent (stateless validation)
+> - If order matters, explicitly check transfer direction within your hook logic
+> - Test your hooks with both `isFirstTransferFromTaker` values
+> - Be aware that taker callbacks execute between your hooks
+
 **Risk Mitigations:**
 ```solidity
 // Limit order exposure
