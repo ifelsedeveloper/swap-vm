@@ -1616,7 +1616,7 @@ This instruction verifies the taker owns a minimum percentage of total token sup
 
 **Use Case:** These instructions provide basic access control for specific scenarios but should not be relied upon as strong security mechanisms. Consider them convenience features rather than robust protections.
 
-### PeggedSwap Known Limitations
+### Swap instructions known limitations
 
 #### Observed Effects
 
