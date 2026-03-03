@@ -1065,6 +1065,46 @@ if (useAquaInsteadOfSignature) {
 | **Custom Logic** | Hooks for validation | Pre/post transfer hooks |
 | **Receiver Control** | Specify token recipient | `receiver` in MakerTraits |
 
+> **⚠️ HOOK EXECUTION ORDER WARNING FOR MAKERS**
+>
+> **Taker Controls Transfer Order:** The taker specifies `isFirstTransferFromTaker` flag, which determines whether the taker transfers input tokens first or receives output tokens first. This means the actual execution order of your hooks depends on the taker's choice.
+>
+> **Complete Execution Sequence:**
+> - `isFirstTransferFromTaker = true`:
+>   1. `preTransferInHook` (maker)
+>   2. `preTransferInCallback` (taker)
+>   3. **Input token settlement** (details below)
+>   4. `postTransferInHook` (maker)
+>   5. `preTransferOutHook` (maker)
+>   6. `preTransferOutCallback` (taker)
+>   7. **Output token settlement** (details below)
+>   8. `postTransferOutHook` (maker)
+>
+> - `isFirstTransferFromTaker = false`:
+>   1. `preTransferOutHook` (maker)
+>   2. `preTransferOutCallback` (taker)
+>   3. **Output token settlement** (details below)
+>   4. `postTransferOutHook` (maker)
+>   5. `preTransferInHook` (maker)
+>   6. `preTransferInCallback` (taker)
+>   7. **Input token settlement** (details below)
+>   8. `postTransferInHook` (maker)
+>
+> **Settlement Mechanisms:**
+> - **Input (non-Aqua):** `IERC20.transferFrom(taker → receiver)`
+> - **Input (Aqua + useTransferFromAndAquaPush):** `IERC20.transferFrom(taker → SwapVM) + AQUA.push()`
+> - **Input (Aqua without useTransferFromAndAquaPush):** Balance validation only (taker must push tokens before `swap()`)
+> - **Output (non-Aqua):** `IERC20.transferFrom(maker → to)`
+> - **Output (Aqua):** `AQUA.pull(maker → to)`
+>
+> **Maker Responsibility:** When implementing hooks, you must account for both possible execution orders. Do not assume a fixed sequence (e.g., assuming `preTransferInHook` always executes before `preTransferOutHook`). Note that taker callbacks are executed between your hooks - this is controlled by the taker and outside your control.
+>
+> **Best Practices:**
+> - Design hooks to be order-independent (stateless validation)
+> - If order matters, explicitly check transfer direction within your hook logic
+> - Test your hooks with both `isFirstTransferFromTaker` values
+> - Be aware that taker callbacks execute between your hooks
+
 **Risk Mitigations:**
 ```solidity
 // Limit order exposure
@@ -1546,9 +1586,50 @@ SwapVMRouter router = new SwapVMRouter(aquaAddress, "MyDEX", "1.0");
 
 ## Known Limitations
 
-### Dust Amount Behavior (<100 wei)
+### Token Support Limitations
 
-For extremely small trades (≤100 wei), integer rounding can cause unexpected behavior across all swap instructions:
+**Fee-on-Transfer Tokens:**
+SwapVM does not support fee-on-transfer tokens (tokens that deduct fees during transfers). Using such tokens will cause accounting mismatches between expected and actual transferred amounts.
+
+**ERC1155 Tokens:**
+SwapVM does not support ERC1155 multi-token standard. Only ERC20 tokens are supported in the current version.
+
+### Two-Token Strategy Limit
+
+SwapVM currently supports **maximum two tokens per strategy** (2D strategies only). Multi-token (XD) functionality for more than two tokens is not available in this version.
+
+**What This Means:**
+- Each strategy can trade between exactly 2 tokens (token pair)
+- AMM pools (XYCSwap, PeggedSwap, XYCConcentrate) operate on 2-token reserves
+- Limit orders work with 1 token pair (1D single-direction)
+- Cannot create strategies that simultaneously manage >2 different tokens
+
+**Recommendation:**
+We strongly recommend against creating custom instructions with more than 2 tokens. The protocol is designed and tested for <= 2-token strategies only. Using more than 2 tokens may lead to unexpected behavior, security vulnerabilities, and is not supported.
+
+### allowZeroAmountIn with AMM Strategies
+
+**Not Recommended:** Using `allowZeroAmountIn=true` with AMM strategies (PeggedSwap, XYCSwap, XYCConcentrate) is not recommended. This flag is intended for:
+- Cross-chain bridge integration
+- Limit orders with specific use cases
+
+For AMM pools, `allowZeroAmountIn=true` can enable theoretical (but economically infeasible) dust extraction.
+
+### Control Instruction Limitations
+
+**_onlyTakerTokenBalanceGte / _onlyTakerTokenBalanceNonZero:**
+These instructions verify the taker owns a minimum token balance. **Limitations:**
+- **Not compatible with routers/aggregators** - these contracts don't hold user tokens
+- **Easily bypassed via flash loans** - if the token supports flash lending, attackers can temporarily borrow the required balance
+
+**_onlyTakerTokenSupplyShareGte:**
+This instruction verifies the taker owns a minimum percentage of total token supply. **Limitations:**
+- **Bypassed with ERC4626 vault tokens** - attackers can wrap/unwrap to manipulate their share
+- **Bypassed with flash-mintable tokens** (e.g., DAI) - attackers can temporarily mint tokens to meet the threshold
+
+**Use Case:** These instructions provide basic access control for specific scenarios but should not be relied upon as strong security mechanisms. Consider them convenience features rather than robust protections.
+
+### Swap instructions known limitations
 
 #### Observed Effects
 
@@ -1558,7 +1639,7 @@ Larger trades may receive better rates due to relative rounding error:
 - **50 wei trade:** 0.3% fee = 0.15 wei → rounds UP to 1 wei (6x overcharge)
 - **100 wei trade:** 0.3% fee = 0.30 wei → rounds UP to 1 wei (3x overcharge)
 
-As amount increases, relative rounding error decreases, creating non-monotonic pricing.
+As amount increases, relative rounding error decreases, creating monotonic pricing.
 
 **2. Zero Outputs**
 Some dust amounts may round down to 0 output, causing transaction reverts.
