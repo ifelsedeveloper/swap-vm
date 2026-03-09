@@ -1372,7 +1372,6 @@ At Pmax = 4000:
 **Why This Happens:**
 - AMM bounds define the swap curve (x*y=k invariant boundaries)
 - Fees are applied as a separate layer: `effective_price = AMM_price ± fee`
-- This is identical to Uniswap v3 behavior (tick ranges + swap fees)
 
 **Analogy:** A product priced at $100 with bounds [$50-$200] plus 10% sales tax means you pay $110, but the product's price bounds remain [$50-$200].
 
