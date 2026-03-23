@@ -74,7 +74,7 @@ We provide full intermediate derivations and numeric examples.
 
 \tableofcontents
 
-\section{Setup}
+\section{Setup}\label{sec:setup}
 
 \begin{definition}[State]
 The pool state is reserves $(x,y)\in\Rp^2$, where $x$ is token $X$ reserve and $y$ is token $Y$ reserve.
@@ -105,7 +105,28 @@ For ExactIn (parameter $\dx$), define
 where $\projY(x',y')=y'$.
 \end{definition}
 
-\section{Baseline: constant product $xy=k$}
+\begin{definition}[Additivity types for trader output]\label{def:additivity-types}
+Let $\mathrm{Out}(\Delta;x,y):= y - \projY(F_\Delta(x,y))$ be the trader output and
+\[
+\mathrm{Out}_{\mathrm{split}}(a,b;x,y) := \mathrm{Out}(a;x,y) + \mathrm{Out}(b;\,F_a(x,y))
+\]
+the total output from executing $a$ then $b$.
+\end{definition}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lclc@{}}
+\toprule
+\textbf{Type} & \textbf{Condition} & \textbf{Meaning} & \textbf{Path-dep.?} \\
+\midrule
+Subadditive & $\mathrm{Out}(a{+}b) > \mathrm{Out}_{\mathrm{split}}$ & One-shot better; splitting hurts trader & Yes \\
+Strictly additive & $\mathrm{Out}(a{+}b) = \mathrm{Out}_{\mathrm{split}}$ & Split or one-shot identical & No \\
+Superadditive & $\mathrm{Out}(a{+}b) < \mathrm{Out}_{\mathrm{split}}$ & Split better; one-shot hurts trader & Yes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Baseline: constant product $xy=k$}\label{sec:baseline}
 
 \begin{lemma}[Constant product ExactIn]
 With invariant $xy=k$ and full input credit $x'=x+\dx$, the post-swap $y$ is uniquely
@@ -126,7 +147,81 @@ Constant product is strictly additive for ExactIn.
 Let $\dx=a+b$. After $a$, $y_1=xy/(x+a)$. After $b$, $y_2=(x+a)y_1/(x+a+b)=xy/(x+a+b)$, equal to the one-shot result.
 \end{proof}
 
-\section{Why the cocycle condition appears}
+\section{Why Strict Additivity Matters}\label{sec:why-sa}
+
+A natural question is why strict additivity (split-invariance) should be a design goal at all.
+After all, the standard Curve-style output-fee rule is \emph{superadditive}: splitting a trade yields strictly \emph{more} output than one-shot execution, which is ``good for traders.''
+However, superadditivity still creates path dependence, which has concrete negative consequences.
+
+\subsection{How standard fee rules break strict additivity on $xy=k$}
+
+Both common fee mechanisms applied to constant product create path dependence:
+
+\paragraph{Output-fee (Curve-style) is superadditive.}
+Start from $(x,y)$ with $k=xy$. The fee-free output for input $\Delta$ is $\Delta y_{\mathrm{nf}} = y\Delta/(x{+}\Delta)$.
+The rule: pay trader $(1{-}f)\Delta y_{\mathrm{nf}}$ and keep $f\Delta y_{\mathrm{nf}}$ in $Y$.
+After the trade, $y_1 = xy/(x{+}\Delta) + fy\Delta/(x{+}\Delta)= y(x{+}f\Delta)/(x{+}\Delta)$, so
+\[
+k_1 = (x{+}\Delta)\,y_1 = y(x + f\Delta) > xy = k_0.
+\]
+The fee pushes $k$ upward. The second chunk of a split trade executes on a ``richer'' pool (higher $k$), yielding more output than the corresponding portion of a one-shot trade.
+Splitting is strictly better for the trader: \emph{superadditive}.
+
+\paragraph{Input-fee reinvest is subadditive.}
+Trade only the net amount $(1{-}f)\Delta$ on the constant-$k$ curve: $y_{\mathrm{nf}} = xy/(x{+}(1{-}f)\Delta)$.
+Credit the full $\Delta$ to reserves: $x_1 = x+\Delta$.
+Now $k_1 = x_1\,y_{\mathrm{nf}} = (x{+}\Delta)\cdot xy/(x{+}(1{-}f)\Delta) > xy$ since $x{+}\Delta > x{+}(1{-}f)\Delta$.
+The extra $X$ makes the pool more $X$-heavy; subsequent $X\to Y$ trades face worse terms.
+Splitting is strictly worse for the trader: \emph{subadditive}.
+
+\paragraph{Dissipative $r^\alpha$ is strictly additive.}
+By the telescoping property (Section~\ref{sec:psi}), the outcome depends only on the ratio $\Psi(x)/\Psi(x{+}\Delta)$.
+Intermediate terms cancel identically regardless of how $\Delta$ is split.
+There is no path dependence: \emph{strictly additive}.
+
+\subsection{Why path-independence is the right design goal}
+
+\begin{enumerate}[label=(\alph*)]
+\item \textbf{Aggregator/router neutrality.}
+If the swap outcome depends on how execution is split, routing algorithms must simulate all possible split patterns to find the optimal one.
+Strict additivity means routers can split arbitrarily without affecting the final outcome---the optimization problem collapses.
+
+\item \textbf{Partial fills and TWAP.}
+Time-weighted execution, partial limit-order fills, and MEV-resistant chunking all require that outcome does not depend on chunking granularity.
+With superadditive fees, a TWAP order gets a different outcome depending on chunk sizes---an undesirable property.
+
+\item \textbf{Deterministic pool growth.}
+Under strict additivity, the pool's effective liquidity grows deterministically with volume, independent of how trades are split.
+This makes LP returns predictable from aggregate volume alone.
+
+\item \textbf{Composability.}
+Protocols building on top of the AMM (vaults, strategies, aggregators) can reason about outcomes without simulating all possible split patterns.
+
+\item \textbf{No gaming incentive.}
+With superadditive fees, sophisticated traders split trades to gain advantage. With subadditive fees, they batch.
+Both create unfair advantages. Strict additivity eliminates the gaming dimension entirely.
+\end{enumerate}
+
+\begin{remark}[SwapVM compatibility]
+In the SwapVM architecture, orders are bytecode programs executed by an on-chain VM.
+Each program specifies its pricing instruction (e.g., dissipative power-curve swap).
+Strict additivity ensures that the program's economic outcome is independent of how the taker chooses to fill the order---critical for a system where makers publish programs and takers execute them.
+\end{remark}
+
+\begin{center}
+\begin{tabular}{@{}lllll@{}}
+\toprule
+\textbf{Fee Rule} & \textbf{Additivity} & \textbf{For Trader} & \textbf{Path-Dep.?} & \textbf{$k$ Change} \\
+\midrule
+Fee-free $xy=k$ & Strictly additive & Path-independent & No & $k$ constant \\
+Output-fee (Curve) & Superadditive & Split better & Yes & $k$ increases (in $Y$) \\
+Input-fee reinvest & Subadditive & One-shot better & Yes & $k$ increases (in $X$) \\
+Dissipative $r^\alpha$ & Strictly additive & Path-independent & No & $K=y x^\alpha$ constant \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Why the cocycle condition appears}\label{sec:cocycle}
 
 A common way to model reinvested fees is to start from constant product and multiply by a factor $R(x,\Delta)\ge 1$ that keeps extra $Y$ in the pool:
 \[
@@ -166,7 +261,7 @@ One-shot:
 Strict additivity requires $y_2=y_S$ for all $y>0$, hence the boxed identity.
 \end{proof}
 
-\section{From $R$ to $\Psi$: a better description of the potential function}
+\section{From $R$ to $\Psi$: a better description of the potential function}\label{sec:psi}
 
 \subsection{Telescoping solution via an endpoint potential $G$}
 
@@ -236,7 +331,7 @@ Differentiate $y\Psi(x)=K$:
 $\Psi(x)dy + y\Psi'(x)dx =0$. Rearranging yields the formula.
 \end{proof}
 
-\section{Conservative Design (Single Invariant)}
+\section{Conservative Design (Single Invariant)}\label{sec:conservative}
 
 The conservative design uses one function $\Psi$ for both directions, i.e., one conserved quantity $K=y\Psi(x)$. It is strictly additive and invertible (time-reversible).
 
@@ -306,7 +401,7 @@ Define retained $Y$ vs constant product:
 \]
 This quantity measures how much more $Y$ remains in the pool compared to pure constant product for the same input.
 
-\section{Conservative power family: $\Psi(x)=x^\alpha$}
+\section{Conservative power family: $\Psi(x)=x^\alpha$}\label{sec:power-family}
 
 Let $0<\alpha\le 1$ and $\Psi(x)=x^\alpha$. Then invariant is
 \[
@@ -356,7 +451,7 @@ We write the trader input as \(\dx_{\mathrm{in}}\) or \(\dy_{\mathrm{in}}\) and 
 \qquad 0<\dx_{\mathrm{out}}<x.
 \end{align}
 
-\section{Dissipative Design (Single Deterministic Mapping)}
+\section{Dissipative Design (Single Deterministic Mapping)}\label{sec:dissipative}
 
 The dissipative design uses a \emph{single} mapping rule: the power $\alpha$ is always applied to the \textbf{input token's reserve}.
 This is not two separate curves, but one unified, asymmetric mapping that is non-conservative (dissipative).
@@ -396,7 +491,7 @@ Unlike the conservative design, these directions do not preserve a single global
 
 \paragraph{Implementation formulas (ExactIn / ExactOut).}
 Even though this section defines a \emph{dissipative} mapping (no invariant), the per-swap
-closed forms are identical to Section~6, because each direction still follows the same one-step
+closed forms are identical to Section~\ref{sec:power-family}, because each direction still follows the same one-step
 update rule.
 
 \textbf{(i) \(X \to Y\) direction.}
@@ -424,96 +519,6 @@ update rule.
 &= y\left(\left(\frac{x}{x-\dx_{\mathrm{out}}}\right)^{1/\alpha}-1\right),
 \qquad 0<\dx_{\mathrm{out}}<x.
 \end{align}
-
-\section{Why Strict Additivity Matters}\label{sec:why-sa}
-
-A natural question is why strict additivity (split-invariance) should be a design goal at all.
-After all, the standard Curve-style output-fee rule is \emph{superadditive}: splitting a trade yields strictly \emph{more} output than one-shot execution, which is ``good for traders.''
-However, superadditivity still creates path dependence, which has concrete negative consequences.
-
-\subsection{Formal additivity types for trader output}
-
-\begin{definition}[Additivity types]\label{def:additivity-types}
-Let $\mathrm{Out}(\Delta;x,y):= y - \projY(F_\Delta(x,y))$ be the trader output and
-\[
-\mathrm{Out}_{\mathrm{split}}(a,b;x,y) := \mathrm{Out}(a;x,y) + \mathrm{Out}(b;\,F_a(x,y))
-\]
-the total output from executing $a$ then $b$. The mechanism is:
-\begin{enumerate}[label=(\alph*)]
-\item \textbf{Strictly additive} if $\mathrm{Out}(a{+}b) = \mathrm{Out}_{\mathrm{split}}(a,b)$ for all $a,b\ge 0$. (Path-independent.)
-\item \textbf{Subadditive} if $\mathrm{Out}(a{+}b) > \mathrm{Out}_{\mathrm{split}}(a,b)$ for all $a,b>0$. (One-shot is better; splitting hurts the trader.)
-\item \textbf{Superadditive} if $\mathrm{Out}(a{+}b) < \mathrm{Out}_{\mathrm{split}}(a,b)$ for all $a,b>0$. (Split is better; one-shot hurts the trader.)
-\end{enumerate}
-\end{definition}
-
-\subsection{How standard fee rules break strict additivity on $xy=k$}
-
-Both common fee mechanisms applied to constant product create path dependence:
-
-\paragraph{Output-fee (Curve-style) is superadditive.}
-Start from $(x,y)$ with $k=xy$. The fee-free output for input $\Delta$ is $\Delta y_{\mathrm{nf}} = y\Delta/(x{+}\Delta)$.
-The rule: pay trader $(1{-}f)\Delta y_{\mathrm{nf}}$ and keep $f\Delta y_{\mathrm{nf}}$ in $Y$.
-After the trade, $y_1 = xy/(x{+}\Delta) + fy\Delta/(x{+}\Delta)= y(x{+}f\Delta)/(x{+}\Delta)$, so
-\[
-k_1 = (x{+}\Delta)\,y_1 = y(x + f\Delta) > xy = k_0.
-\]
-The fee pushes $k$ upward. The second chunk of a split trade executes on a ``richer'' pool (higher $k$), yielding more output than the corresponding portion of a one-shot trade.
-Splitting is strictly better for the trader: \emph{superadditive}.
-
-\paragraph{Input-fee reinvest is subadditive.}
-Trade only the net amount $(1{-}f)\Delta$ on the constant-$k$ curve: $y_{\mathrm{nf}} = xy/(x{+}(1{-}f)\Delta)$.
-Credit the full $\Delta$ to reserves: $x_1 = x+\Delta$.
-Now $k_1 = x_1\,y_{\mathrm{nf}} = (x{+}\Delta)\cdot xy/(x{+}(1{-}f)\Delta) > xy$ since $x{+}\Delta > x{+}(1{-}f)\Delta$.
-The extra $X$ makes the pool more $X$-heavy; subsequent $X\to Y$ trades face worse terms.
-Splitting is strictly worse for the trader: \emph{subadditive}.
-
-\paragraph{Dissipative $r^\alpha$ is strictly additive.}
-By telescoping (Section~4), the outcome depends only on the ratio $\Psi(x)/\Psi(x{+}\Delta)$.
-Intermediate terms cancel identically regardless of how $\Delta$ is split.
-There is no path dependence: \emph{strictly additive}.
-
-\subsection{Why path-independence is the right design goal}
-
-\begin{enumerate}[label=(\alph*)]
-\item \textbf{Aggregator/router neutrality.}
-If the swap outcome depends on how execution is split, routing algorithms must simulate all possible split patterns to find the optimal one.
-Strict additivity means routers can split arbitrarily without affecting the final outcome---the optimization problem collapses.
-
-\item \textbf{Partial fills and TWAP.}
-Time-weighted execution, partial limit-order fills, and MEV-resistant chunking all require that outcome does not depend on chunking granularity.
-With superadditive fees, a TWAP order gets a different outcome depending on chunk sizes---an undesirable property.
-
-\item \textbf{Deterministic pool growth.}
-Under strict additivity, the pool's effective liquidity grows deterministically with volume, independent of how trades are split.
-This makes LP returns predictable from aggregate volume alone.
-
-\item \textbf{Composability.}
-Protocols building on top of the AMM (vaults, strategies, aggregators) can reason about outcomes without simulating all possible split patterns.
-
-\item \textbf{No gaming incentive.}
-With superadditive fees, sophisticated traders split trades to gain advantage. With subadditive fees, they batch.
-Both create unfair advantages. Strict additivity eliminates the gaming dimension entirely.
-\end{enumerate}
-
-\begin{remark}[SwapVM compatibility]
-In the SwapVM architecture, orders are bytecode programs executed by an on-chain VM.
-Each program specifies its pricing instruction (e.g., dissipative power-curve swap).
-Strict additivity ensures that the program's economic outcome is independent of how the taker chooses to fill the order---critical for a system where makers publish programs and takers execute them.
-\end{remark}
-
-\begin{center}
-\begin{tabular}{@{}lllll@{}}
-\toprule
-\textbf{Fee Rule} & \textbf{Additivity} & \textbf{For Trader} & \textbf{Path-Dep.?} & \textbf{$k$ Change} \\
-\midrule
-Fee-free $xy=k$ & Strictly additive & Path-independent & No & $k$ constant \\
-Output-fee (Curve) & Superadditive & Split better & Yes & $k$ increases (in $Y$) \\
-Input-fee reinvest & Subadditive & One-shot better & Yes & $k$ increases (in $X$) \\
-Dissipative $r^\alpha$ & Strictly additive & Path-independent & No & $K=y x^\alpha$ constant \\
-\bottomrule
-\end{tabular}
-\end{center}
-
 
 \section{The Impossibility Theorem}\label{sec:impossibility}
 
@@ -1011,7 +1016,7 @@ All three follow from Theorem~\ref{thm:ratio-only}: because $\Psi(x)=x^\alpha$, 
 The ratio $r$ encodes the trade's size \emph{relative} to the pool, and the fee is a monotone function of that single variable.
 
 
-\section{Numeric showcase and evidence}
+\section{Numeric showcase and evidence}\label{sec:numerics}
 We provide concrete numeric examples (with fully expanded calculations), a fee-rate visualization, and a round-trip loss summary.
 
 \subsection{Fee rate vs trade size ($\alpha=0.997$)}
@@ -1115,7 +1120,7 @@ Expanding the power:
 = \exp\!\big(0.0641166179844\big)\approx 1.0662167315579,\\
 \dx_{\mathrm{in}} &= 1000\big(1.0662167315579-1\big)\approx 66.2167315578528.
 \end{align*}
-\section{Pitfall: scaling ExactOut input by a constant breaks strict additivity}
+\section{Pitfall: scaling ExactOut input by a constant breaks strict additivity}\label{sec:pitfall}
 
 Suppose you compute conservative power ExactOut base input
 \[
@@ -1128,14 +1133,14 @@ and then charge
 This generally breaks ExactOut strict additivity in $\dy$ because the correct telescoping structure requires endpoint multiplicativity in the ratio $y/(y-\dy)$, not post-hoc scaling of $\dx$.
 To preserve strict additivity, one must modify the exponent (an endpoint function), not multiply the solved $\dx$.
 
-\section{Summary}
+\section{Summary}\label{sec:summary}
 
 \begin{itemize}[leftmargin=2em]
 \item Strict additivity for ExactIn with reinvested-within-pricing factors forces a cocycle identity and therefore a telescoping endpoint representation via a potential $\Psi$ (Sections~3--4).
 
-\item \textbf{Conservative design}: a single potential function $\Psi$ yields invariant $K=y\Psi(x)$, strict additivity for ExactIn/ExactOut, and invertibility (no round-trip extraction). Time-reversible (Section~5).
+\item \textbf{Conservative design}: a single potential function $\Psi$ yields invariant $K=y\Psi(x)$, strict additivity for ExactIn/ExactOut, and invertibility (no round-trip extraction). Time-reversible (Section~\ref{sec:conservative}).
 
-\item \textbf{Dissipative design}: a single deterministic mapping where the power $\alpha$ is always applied to the input token's reserve. Strictly additive per direction, but non-conservative---round trips dissipate trader value into the pool, creating a real bid-ask spread. Time-irreversible (Section~7).
+\item \textbf{Dissipative design}: a single deterministic mapping where the power $\alpha$ is always applied to the input token's reserve. Strictly additive per direction, but non-conservative---round trips dissipate trader value into the pool, creating a real bid-ask spread. Time-irreversible (Section~\ref{sec:dissipative}).
 
 \item \textbf{Standard fee rules break strict additivity}: the Curve-style output-fee rule is \emph{superadditive} (split better for trader) because the retained fee pushes $k$ upward, enriching subsequent chunks. The input-fee reinvest rule is \emph{subadditive} (one-shot better) because the extra credited input makes subsequent same-direction trades less favorable. Both are path-dependent (Section~\ref{sec:why-sa}).
 
