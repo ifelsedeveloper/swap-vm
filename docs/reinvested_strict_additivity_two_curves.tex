@@ -650,31 +650,110 @@ The dissipative design occupies the ``stateless $+$ LP-protective'' cell, necess
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[scale=0.85]
-    \begin{scope}[xshift=0cm]
-        \draw[->] (0,0) -- (5,0) node[right] {$\Delta$};
-        \draw[->] (0,0) -- (0,4) node[above] {$f(\Delta)$};
-        \draw[blue, ultra thick, domain=0:4.5, samples=50] plot (\x, {0.15*\x*\x});
-        \draw[gray, dashed] (0,0) -- (4.5, 2.7);
-        \filldraw[blue] (2, 0.6) circle (2pt) node[below right] {\small$f(a)$};
-        \filldraw[blue] (4, 2.4) circle (2pt) node[right] {\small$f(a\!+\!b)$};
-        \draw[<->, red] (4, 1.6) -- (4, 2.4);
-        \node[red, right] at (4.1, 2.0) {\footnotesize gap};
-        \node[below] at (2.25, -0.5) {\textbf{Progressive}};
-        \node[below] at (2.25, -1) {\small $f(a\!+\!b) > f(a)+f(b)$};
-    \end{scope}
-    \begin{scope}[xshift=7cm]
-        \draw[->] (0,0) -- (5,0) node[right] {$\Delta$};
-        \draw[->] (0,0) -- (0,4) node[above] {$f(\Delta)$};
-        \draw[green!60!black, ultra thick, domain=0:4.5, samples=50] plot (\x, {1.2*sqrt(\x)});
-        \draw[gray, dashed] (0,0) -- (4.5, 2.7);
-        \filldraw[green!60!black] (2, 1.7) circle (2pt) node[above left] {\small$f(a)$};
-        \filldraw[green!60!black] (4, 2.4) circle (2pt) node[right] {\small$f(a\!+\!b)$};
-        \draw[<->, red] (4, 2.4) -- (4, 2.9);
-        \node[red, right] at (4.1, 2.65) {\footnotesize gap};
-        \node[below] at (2.25, -0.5) {\textbf{LP-Protective}};
-        \node[below] at (2.25, -1) {\small $f(a\!+\!b) \le f(a)+f(b)$};
-    \end{scope}
+\begin{tikzpicture}[scale=0.9]
+
+% -------- Left: Progressive (Convex) --------
+\begin{scope}[xshift=0cm]
+  \draw[->] (0,0) -- (6.5,0) node[right] {$\Delta$};
+  \draw[->] (0,0) -- (0,5.5) node[above] {$f(\Delta)$};
+
+  \def\a{1.5}
+  \def\b{2.5}
+  \pgfmathsetmacro{\ab}{\a+\b}
+  \pgfmathsetmacro{\fa}{0.15*\a*\a}
+  \pgfmathsetmacro{\fb}{0.15*\b*\b}
+  \pgfmathsetmacro{\fab}{0.15*\ab*\ab}
+  \pgfmathsetmacro{\fapfb}{\fa+\fb}
+
+  % Curve
+  \draw[blue, ultra thick, domain=0:5.2, samples=80]
+    plot (\x, {0.15*\x*\x});
+
+  % Vertical dashed lines down to x-axis
+  \draw[gray, dashed, thin] (\a, 0)    -- (\a, \fa);
+  \draw[gray, dashed, thin] (\b, 0)    -- (\b, \fb);
+  \draw[gray, dashed, thin] (\ab, 0)   -- (\ab, \fab);
+
+  % Horizontal dashed line at f(a)+f(b) level
+  \draw[red, dashed] (0, \fapfb) -- (\ab, \fapfb);
+
+  % Gap arrow between f(a)+f(b) and f(a+b)
+  \draw[<->, red, thick] (\ab, \fapfb) -- (\ab, \fab);
+  \node[red, right] at (\ab, {(\fapfb+\fab)/2})
+    {\small $f(a{+}b)-[f(a){+}f(b)]>0$};
+
+  % Points on curve
+  \filldraw[blue] (\a,  \fa)  circle (2.5pt)
+    node[above left]  {\small $f(a)$};
+  \filldraw[blue] (\b,  \fb)  circle (2.5pt)
+    node[above left]  {\small $f(b)$};
+  \filldraw[blue] (\ab, \fab) circle (2.5pt)
+    node[above left] {\small $f(a{+}b)$};
+
+  % Point f(a)+f(b) on the vertical at a+b
+  \filldraw[red] (\ab, \fapfb) circle (2pt)
+    node[right] {\small $f(a){+}f(b)$};
+
+  % x-axis labels
+  \node[below] at (\a,  0) {\small $a$};
+  \node[below] at (\b,  0) {\small $b$};
+  \node[below] at (\ab, 0) {\small $a{+}b$};
+
+  \node[below] at (2.5,-0.7)  {\textbf{Progressive (Convex)}};
+  \node[below] at (2.5,-1.15) {\small $f(a{+}b)>f(a)+f(b)$};
+\end{scope}
+
+% -------- Right: LP-Protective (Concave) --------
+\begin{scope}[xshift=9cm]
+  \draw[->] (0,0) -- (6.5,0) node[right] {$\Delta$};
+  \draw[->] (0,0) -- (0,5.5) node[above] {$f(\Delta)$};
+
+  \def\a{1.5}
+  \def\b{2.5}
+  \pgfmathsetmacro{\ab}{\a+\b}
+  \pgfmathsetmacro{\fa}{1.8*sqrt(\a)}
+  \pgfmathsetmacro{\fb}{1.8*sqrt(\b)}
+  \pgfmathsetmacro{\fab}{1.8*sqrt(\ab)}
+  \pgfmathsetmacro{\fapfb}{\fa+\fb}
+
+  % Curve
+  \draw[green!60!black, ultra thick, domain=0.05:5.2, samples=80]
+    plot (\x, {1.8*sqrt(\x)});
+
+  % Vertical dashed lines down to x-axis
+  \draw[gray, dashed, thin] (\a,  0) -- (\a,  \fa);
+  \draw[gray, dashed, thin] (\b,  0) -- (\b,  \fb);
+  \draw[gray, dashed, thin] (\ab, 0) -- (\ab, \fab);
+
+  % Horizontal dashed line at f(a)+f(b) level
+  \draw[red, dashed] (0, \fapfb) -- (\ab, \fapfb);
+
+  % Gap arrow between f(a+b) and f(a)+f(b)
+  \draw[<->, red, thick] (\ab, \fab) -- (\ab, \fapfb);
+  \node[red, right] at (\ab, {(\fab+\fapfb)/2})
+    {\small $f(a){+}f(b)-f(a{+}b)>0$};
+
+  % Points on curve
+  \filldraw[green!60!black] (\a,  \fa)  circle (2.5pt)
+    node[below right] {\small $f(a)$};
+  \filldraw[green!60!black] (\b,  \fb)  circle (2.5pt)
+    node[below right] {\small $f(b)$};
+  \filldraw[green!60!black] (\ab, \fab) circle (2.5pt)
+    node[below right] {\small $f(a{+}b)$};
+
+  % Point f(a)+f(b) on the vertical at a+b
+  \filldraw[red] (\ab, \fapfb) circle (2pt)
+    node[right] {\small $f(a){+}f(b)$};
+
+  % x-axis labels
+  \node[below] at (\a,  0) {\small $a$};
+  \node[below] at (\b,  0) {\small $b$};
+  \node[below] at (\ab, 0) {\small $a{+}b$};
+
+  \node[below] at (2.5,-0.7)  {\textbf{LP-Protective (Concave)}};
+  \node[below] at (2.5,-1.15) {\small $f(a{+}b)\le f(a)+f(b)$};
+\end{scope}
+
 \end{tikzpicture}
 \caption{Progressive fees are convex (superadditive at fixed state), while LP-protective fees are concave (subadditive). No function can be both.}
 \label{fig:impossibility-geometry}
@@ -1010,6 +1089,23 @@ r^{0.997} &= \exp(0.997\times(-0.40546510811)) = \exp(-0.40424896479) = 0.667478
 
 The fee rate drops monotonically from $0.300\%$ (ceiling) toward $0\%$ as the trade grows relative to the pool.
 For typical trade sizes (${\le}5\%$ of pool), the discount is ${\le}2.5\%$---negligible in practice.
+
+\begin{remark}[Why the whale discount is not a problem in practice]
+The anti-progressive fee discount on large trades is naturally compensated by the AMM's price impact.
+A trade consuming $f\%$ of the pool moves the marginal price by $O(f)$, so a large trader pays significantly more per unit of output than a small trader---not through the fee, but through the price curve itself.
+
+Concretely, for a swap of size $\dx$ on pool $(x,y)$, the trader's \emph{total cost} (vs.\ marginal price $p=\alpha y/x$) has two components:
+\[
+\underbrace{(1-\alpha)\,p\,\dx}_{\text{fee component}} \;+\; \underbrace{p\,\dx - \Delta y_{\mathrm{diss}}}_{\text{price impact}}.
+\]
+The fee component is nearly constant (bounded by $(1{-}\alpha)p\dx$), while the price impact grows super-linearly with trade size.
+For a trade consuming $50\%$ of reserves, the fee discount is ${\sim}19\%$, but the price impact is ${\sim}33\%$ of the output---dwarfing the fee discount by an order of magnitude.
+
+In the SwapVM context, the maker sets $(x,y)$ and $\alpha$ to define their order.
+A taker who fills a large portion of the order faces steep price impact that more than offsets any fee discount.
+The maker therefore receives \emph{more} total value (reserves grow faster) from large trades, not less.
+The anti-progressive fee structure is economically harmless because the price curve already penalizes large trades.
+\end{remark}
 
 \subsection{Unified view}
 
