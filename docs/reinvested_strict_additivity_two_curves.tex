@@ -89,42 +89,49 @@ F_\theta(x,y)=(x_\theta,y_\theta).
 \]
 \end{definition}
 
-\begin{definition}[Strict additivity / split invariance]
-A family $\{F_\theta\}$ is \emph{strictly additive} in parameter $\theta$ if for all $a,b>0$,
-\[
-F_{a+b} = F_b\circ F_a.
-\]
-Equivalently, applying $a$ then $b$ produces the same final state as applying $a+b$ once.
-\end{definition}
-
 \begin{definition}[Output function]
-For ExactIn (parameter $\dx$), define
+For ExactIn (parameter $\dx$), define the trader output
 \[
-\Delta y = f((x,y),\dx) := y-\projY(F_{\dx}(x,y)),
+\mathrm{Out}(\Delta;x,y) := y-\projY(F_{\Delta}(x,y)),
 \]
-where $\projY(x',y')=y'$.
+where $\projY(x',y')=y'$, and the split output
+\[
+\mathrm{Out}_{\mathrm{split}}(a,b;x,y) := \mathrm{Out}(a;x,y) + \mathrm{Out}(b;\,F_a(x,y)).
+\]
 \end{definition}
 
-\begin{definition}[Additivity types for trader output]\label{def:additivity-types}
-Let $\mathrm{Out}(\Delta;x,y):= y - \projY(F_\Delta(x,y))$ be the trader output and
-\[
-\mathrm{Out}_{\mathrm{split}}(a,b;x,y) := \mathrm{Out}(a;x,y) + \mathrm{Out}(b;\,F_a(x,y))
-\]
-the total output from executing $a$ then $b$.
+\begin{definition}[Additivity types]\label{def:additivity-types}
+A state update family $\{F_\theta\}$ is classified by comparing one-shot execution $F_{a+b}$ with sequential execution $F_b\circ F_a$:
 \end{definition}
 
 \begin{center}
 \small
-\begin{tabular}{@{}lclc@{}}
+\begin{tabular}{@{}lccll@{}}
 \toprule
-\textbf{Type} & \textbf{Condition} & \textbf{Meaning} & \textbf{Path-dep.?} \\
+\textbf{Type} & \textbf{State condition} & \textbf{Output condition} & \textbf{Meaning} & \textbf{Path-dep.?} \\
 \midrule
-Subadditive & $\mathrm{Out}(a{+}b) > \mathrm{Out}_{\mathrm{split}}$ & One-shot better; splitting hurts trader & Yes \\
-Strictly additive & $\mathrm{Out}(a{+}b) = \mathrm{Out}_{\mathrm{split}}$ & Split or one-shot identical & No \\
-Superadditive & $\mathrm{Out}(a{+}b) < \mathrm{Out}_{\mathrm{split}}$ & Split better; one-shot hurts trader & Yes \\
+Subadditive
+  & ---
+  & $\mathrm{Out}(a{+}b) > \mathrm{Out}_{\mathrm{split}}$
+  & One-shot better
+  & Yes \\
+\addlinespace
+Strictly additive
+  & $F_{a+b} = F_b\circ F_a$
+  & $\mathrm{Out}(a{+}b) = \mathrm{Out}_{\mathrm{split}}$
+  & Split or one-shot identical
+  & No \\
+\addlinespace
+Superadditive
+  & ---
+  & $\mathrm{Out}(a{+}b) < \mathrm{Out}_{\mathrm{split}}$
+  & Split better
+  & Yes \\
 \bottomrule
 \end{tabular}
 \end{center}
+\noindent
+Strict additivity at the state level ($F_{a+b}=F_b\circ F_a$) implies strict additivity at the output level; the converse need not hold.
 
 \section{Baseline: constant product $xy=k$}\label{sec:baseline}
 
