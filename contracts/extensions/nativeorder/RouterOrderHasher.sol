@@ -21,7 +21,7 @@ abstract contract RouterOrderHasher {
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 private constant _ORDER_TYPEHASH = keccak256("Order(address maker,uint256 traits,bytes data)");
 
-    address private immutable _ROUTER;
+    ISwapVM public immutable ROUTER;
     bytes32 private immutable _ROUTER_NAME_HASH;
     bytes32 private immutable _ROUTER_VERSION_HASH;
     bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
@@ -38,7 +38,7 @@ abstract contract RouterOrderHasher {
             revert RouterOrderHashMismatch();
         }
 
-        _ROUTER = address(router);
+        ROUTER = router;
         _ROUTER_NAME_HASH = nameHash;
         _ROUTER_VERSION_HASH = versionHash;
         _CACHED_CHAIN_ID = block.chainid;
@@ -61,7 +61,7 @@ abstract contract RouterOrderHasher {
 
     function _routerDomainSeparator() private view returns (bytes32) {
         if (block.chainid == _CACHED_CHAIN_ID) return _CACHED_DOMAIN_SEPARATOR;
-        return _buildDomainSeparator(_ROUTER, _ROUTER_NAME_HASH, _ROUTER_VERSION_HASH);
+        return _buildDomainSeparator(address(ROUTER), _ROUTER_NAME_HASH, _ROUTER_VERSION_HASH);
     }
 
     function _buildDomainSeparator(address router, bytes32 nameHash, bytes32 versionHash) private view returns (bytes32) {
